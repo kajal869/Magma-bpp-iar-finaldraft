@@ -51,6 +51,12 @@ def template_for(layout: str | None) -> tuple[dict | None, str]:
     return json.loads(p.read_text(encoding="utf-8")), name
 
 
+def signature_available(theme: str) -> bool:
+    """The signatory images are private (not in the repo). Drafts print the signature only when the files are present."""
+    names = ["sig_laghu.png"] if theme == "laghu" else ["sig_ral.png", "sig_gst.png"]
+    return all((ROOT / "app" / "assets" / n).exists() for n in names)
+
+
 def _lines(v) -> list[str]:
     if isinstance(v, list):
         return v
@@ -109,6 +115,9 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     annex, unbuilt = annexures_for(res, sec, case)
     case["annexures"] = annex
     notes += [f"not built: {u}" for u in unbuilt]
+    case["options"]["show_signature"] = signature_available(case["presentation"]["theme"])
+    if not case["options"]["show_signature"]:
+        notes.append("signature images (app/assets/sig_*.png) are not installed; the draft prints no signature")
     case["options"]["wording_sections"] = [n for n in range(1, 14) if sec["sections"][n]["sum_insured"] or sec["sections"][n]["premium"]]
     tool = {"slip": "slip", "quote": "quote", "imd": "master"}
     case["provenance"] = {

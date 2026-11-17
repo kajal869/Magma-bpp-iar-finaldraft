@@ -210,3 +210,51 @@ def test_section_edit_changes_the_schedule(library, files):
 
 def test_clause_list_endpoint(library):
     assert client.get("/api/clauses").json()["clauses"] == sorted(TITLES)
+
+
+# ---------------------------------------------------------------- backend test APIs (/api/extract/*)
+def _upload(path, slip, quote, **kw):
+    with open(slip, "rb") as a, open(quote, "rb") as b:
+        return client.post(path, files={"closing_slip": ("s.xlsx", a), "quote": ("q.xlsx", b)}, **kw)
+
+
+def test_extract_fields_sections_case(files):
+    f = _upload("/api/extract/fields", files["slip"], files["quote"]).json()
+    by = {x["field"]: x for x in f["fields"]}
+    assert by["insured.name"]["status"] == "ok" and by["premium.final"]["source"]["tool"] == "quote"
+    s = _upload("/api/extract/sections", files["slip"], files["quote"]).json()
+    assert s["layout"] == "laghu" and s["tie"] and [x["no"] for x in s["sections"]] == [1, 3, 7]
+    c = _upload("/api/extract/case", files["slip"], files["quote"]).json()
+    assert c["schemaErrors"] == [] and c["policySystemFieldsBlank"] >= 7 and len(c["case"]["schedule"]["sections"]) == 13
+
+
+def test_extract_all_and_render(files):
+    a = _upload("/api/extract/all", files["slip"], files["quote"]).json()
+    assert {"fields", "sections", "addons", "generated", "warnings"} <= set(a)
+    r = _upload("/api/extract/render", files["slip"], files["quote"])
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
+
+
+def test_extract_needs_files_or_case_and_rejects_bad_input(files, tmp_path):
+    assert client.post("/api/extract/fields").status_code == 400
+    assert client.post("/api/extract/fields?case=no_such_case").status_code == 404
+    p = tmp_path / "x.txt"
+    p.write_text("x")
+    with open(p, "rb") as a, open(p, "rb") as b:
+        assert client.post("/api/extract/fields", files={"closing_slip": ("x.txt", a), "quote": ("y.txt", b)}).status_code == 400
+    assert "demo_laghu" in client.get("/api/extract/registered").json()["cases"]
+
+
+def test_condition_lines_are_not_shown_as_dropped_addons(library, files, tmp_path):
+    """Laghu-style quotes list plain conditions with no insurer remark. They are conditions, not add-on covers."""
+    import openpyxl
+    q = tmp_path / "q_cond.xlsx"
+    wb = openpyxl.load_workbook(files["quote"])
+    ws = wb["Quote"]
+    for r in (["Conditions, Warranties, Clauses and Exclusions"], ["Earthquake (Fire & Shock) Cover"], ["No cover for Kutcha Construction"], ["Agreed Bank Clause"]):
+        ws.append(r)
+    wb.save(q)
+    api = client.post("/api/extract/addons", files={"closing_slip": ("s.xlsx", open(files["slip"], "rb")), "quote": ("q.xlsx", open(q, "rb"))}).json()
+    assert api["counts"]["pending"] >= 3 and all(r["row_type"] == "condition_line" for r in api["rows"])
+    ui = analyze(files["slip"], q).json()
+    assert ui["addons"] == [] and any("condition / warranty lines" in n for n in ui["notes"])

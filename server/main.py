@@ -48,6 +48,8 @@ STORE: dict[str, dict] = {}
 SESSIONS: dict[str, dict] = {}
 
 app = FastAPI(title="Magma BPP front-pack demo")
+from api_extract import router as extract_router  # noqa: E402
+app.include_router(extract_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -170,8 +172,12 @@ def _summary(res) -> dict:
 
 
 def _addon_payload(rows: list[dict]) -> list[dict]:
+    """Add-on covers for the review table. Plain condition/warranty lines (no insurer remark, e.g. Laghu quotes) are not covers: they are
+    already in the conditions block, so they are left out here instead of showing up as an alarming wall of 'dropped' rows."""
     out = []
     for i, r in enumerate(rows):
+        if r.get("row_type") == "condition_line":
+            continue
         if r["decision"] == "drop":
             status = "dropped"
         elif r["auto_eligible"]:
@@ -253,6 +259,9 @@ def analyze(closing_slip: UploadFile = File(...), quote: UploadFile = File(...))
     SESSIONS[sid] = {"res": res, "case": case, "suggest": suggest, "exp": time.time() + TTL}
     fields = fields_mod.build_fields(case, _env(res), suggest)
     addons = _addon_payload(res["addons"])
+    n_cond = sum(1 for r in res["addons"] if r.get("row_type") == "condition_line")
+    if n_cond:
+        notes.append(f"{n_cond} condition / warranty lines in the quote have no insurer remark, so they are treated as conditions (see Conditions below), not add-on covers.")
     return {"sessionId": sid, "summary": summary, "fields": fields, "groups": fields_mod.GROUPS, "warnings": warnings, "layout": (res.get("sections") or {}).get("layout"),
             "addons": addons, "sections": _sections_payload(res.get("sections")), "terms": _terms_payload(case),
             "notes": notes + ["Policy-system values (policy number, invoice number, Magma GSTIN, ...) are not in the two files, so they start empty."]

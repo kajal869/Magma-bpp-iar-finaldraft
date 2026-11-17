@@ -13,7 +13,7 @@ export type RowState = "ok" | "check" | "missing" | "dropped";
 
 /** Status the user sees: dropped, unresolved (red), still to check (amber) or fine (green). A row the user has edited counts as checked. */
 export function stateOf(r: AddonRow): RowState {
-  if (!r.include) return "dropped";
+  if (!r.include) return r.decision === "pending" && !r.touched ? "check" : "dropped"; // a pending remark is undecided, not dropped
   if (!r.clause && !r.printAsQuoted) return "missing";
   if (r.touched) return "ok";
   return r.status === "ok" ? "ok" : "check";
@@ -83,9 +83,9 @@ export default function AddonsTable({ rows, clauses, onChange }: Props) {
               <div className="a-top">
                 <label className="keep">
                   <input type="checkbox" checked={r.include} onChange={(e) => patch(i, { include: e.target.checked })} />
-                  {r.include ? "Keep" : "Drop"}
+                  {r.include ? "Keep" : r.decision === "pending" && !r.touched ? "Undecided" : "Drop"}
                 </label>
-                <span className={`badge b-${s === "dropped" ? "off" : s}`}>{LABEL[s]}</span>
+                <span className={`badge b-${s === "dropped" ? "off" : s}`}>{!r.include && r.decision === "pending" && !r.touched ? "Undecided" : LABEL[s]}</span>
                 <span className="muted small">{r.sheet}{r.row ? ` · row ${r.row}` : ""}{r.method ? ` · ${r.method}` : ""}</span>
                 {r.id === null && <button className="link" onClick={() => remove(i)}>Remove</button>}
               </div>
