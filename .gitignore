@@ -48,3 +48,6 @@ TEAM_CODE_ANALYSIS_AND_PLAN.md
 
 # signatory images are private
 app/assets/sig_*.png
+
+# learned layout profiles (private, written automatically)
+extractor/layouts/learned/

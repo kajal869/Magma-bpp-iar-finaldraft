@@ -48,8 +48,10 @@ STORE: dict[str, dict] = {}
 SESSIONS: dict[str, dict] = {}
 
 app = FastAPI(title="Magma BPP front-pack demo")
+from api_extract import layouts as layouts_router  # noqa: E402
 from api_extract import router as extract_router  # noqa: E402
 app.include_router(extract_router)
+app.include_router(layouts_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
 
 

@@ -23,6 +23,8 @@ FIELDS = {
     "product.name": ("text", "identity"),
     "premium.net": ("money", "money"),
     "premium.final": ("money", "money"),
+    "premium.terrorism": ("money", "money"),
+    "hypothecation": ("text", "identity"),
 }
 
 

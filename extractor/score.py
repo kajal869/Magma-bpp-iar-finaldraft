@@ -57,6 +57,8 @@ def score_case(case: str, cfg: dict) -> dict:
     for name, (kind, _) in FIELDS.items():
         truth = _get(key, KEY_PATHS.get(name, name))
         f = got.get(name)
+        if f is None and truth in (None, 0, [], "", 0.0):
+            continue                                   # nothing expected, nothing found: not a miss
         if f is None:
             tally["missing"] += 1
             rows.append((name, "missing", None, truth, ""))

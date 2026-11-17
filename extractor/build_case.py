@@ -94,14 +94,20 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
 
     net, final = val("premium.net", None), val("premium.final", None)
     gst = round((final - net), 2) if net is not None and final is not None else 0.0
-    case["premium"] = {"basic": net if net is not None else 0, "terrorism": 0, "net": net if net is not None else 0,
+    terr = val("premium.terrorism", None)
+    terr = float(terr) if isinstance(terr, (int, float)) else 0
+    case["premium"] = {"basic": (net - terr) if net is not None else 0, "terrorism": terr, "net": net if net is not None else 0,
                        "taxes": [{"type": "IGST", "rate": 0.18, "amount": gst}], "final": final if final is not None else 0}
-    notes.append("tax split (IGST vs CGST+SGST) and the terrorism part of the premium are not decided by the files; placeholders IGST 18% / terrorism 0")
+    notes.append("tax split (IGST vs CGST+SGST) is not decided by the files; placeholder IGST 18%" + ("" if "premium.terrorism" in f else "; the terrorism part of the premium was not found (0)"))
     share = slip.get("our_share")
     case["coinsurance"] = ([{"insurer": c["name"], "share_pct": c["share"] * 100 if c["share"] <= 1 else c["share"]} for c in (slip.get("co_insurers") or [])]
                            or ([{"insurer": "Magma General Insurance Limited", "share_pct": share * 100 if share and share <= 1 else (share or 100)}]))
     fin = hdr.get("financial interest")
-    case["hypothecation"] = [fin] if fin else []
+    hy = f["hypothecation"].value if "hypothecation" in f and f["hypothecation"].value else None
+    case["hypothecation"] = list(hy) if isinstance(hy, list) else ([hy] if hy else ([fin] if fin else []))
+    ba = (sec.get("scalars") or {}).get("business_activity", {}).get("value")
+    if ba and not case["insured"]["business_activity"]:
+        case["insured"]["business_activity"] = str(ba)
 
     rows = []
     for n in range(1, 14):

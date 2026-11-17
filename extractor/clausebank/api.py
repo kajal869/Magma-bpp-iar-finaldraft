@@ -133,7 +133,7 @@ def match_rows(rows: list[dict], idx: Index | None = None, aliases: dict | None 
             review.append("low_confidence")
         out.append({
             "sheet": q["sheet"], "row": q["row"], "serial": q.get("serial"), "name": q["name"], "limit": q.get("limit", ""), "remark": q.get("remark", ""),
-            "decision": q["decision"], "decision_class": q["cls"], "row_type": q.get("row_type", "addon_row"), "cited": q.get("cited"), "hidden_sheet": bool(q.get("hidden")),
+            "decision": q["decision"], "decision_class": q["cls"], "row_type": q.get("row_type", "addon_row"), "section": q.get("section", 1), "cited": q.get("cited"), "hidden_sheet": bool(q.get("hidden")),
             "clause": res["clause"], "wording_id": ids.get(fullkey(res["clause"])) if res["clause"] else None,
             "method": res["method"], "confidence": conf, "candidates": res["candidates"], "near_identical": near,
             "auto_eligible": auto, "needs_review": review, "source_tool": "kajal",

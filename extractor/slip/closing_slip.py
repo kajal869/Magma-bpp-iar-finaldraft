@@ -30,6 +30,8 @@ LABELS = [
     ("occupancy", r"^occupancy$"),
     ("risk_code", r"^risk code"),
     ("hazard_grade", r"^hazard grade"),
+    ("pd_allocation", r"^property damage \(fire section\)"),
+    ("bi_allocation", r"^business interruption \(flop section\)"),
 ]
 _COMPILED = [(k, re.compile(p)) for k, p in LABELS]
 
