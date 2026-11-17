@@ -41,6 +41,15 @@ def kept(rows: list[dict]) -> list[dict]:
     return out
 
 
+def section_addon_blocks(addons: list[dict], n: int) -> list[dict]:
+    """One add-on block per location sheet, only for rows that belong to section n (rows without a section count as section 1)."""
+    by_sheet: dict[str, list] = {}
+    for r in kept([r for r in addons if int(r.get("section") or 1) == n]):
+        by_sheet.setdefault(r["sheet"], []).append(r)
+    word = "Add on Covers-For Risk location-" if n == 1 else "Add on Covers for Risk location-"
+    return [addon_block(rows, f"{word}{i}" if len(by_sheet) > 1 else "Add on Covers") for i, rows in enumerate(by_sheet.values(), 1)]
+
+
 def build(sec: dict, addons: list[dict], case_hdr: dict) -> tuple[list[dict], list[str]]:
     secs, unbuilt, out = sec["sections"], [], []
     opted = [n for n, s in secs.items() if s["sum_insured"] or s["premium"]]
@@ -60,11 +69,7 @@ def build(sec: dict, addons: list[dict], case_hdr: dict) -> tuple[list[dict], li
                 if inbuilt:
                     blocks.append({"type": "si_simple", "heading": "Inbuilt Cover", "columns": ["Sr. no.", "Description", "Sum Insured (in INR)"],
                                    "rows": [{"sr": i + 1, **r} for i, r in enumerate(inbuilt)]})
-                by_sheet: dict[str, list] = {}
-                for r in kept(addons):                     # add-on rows the quote or the user supplied (laghu quotes normally have none)
-                    by_sheet.setdefault(r["sheet"], []).append(r)
-                for sh, rws in by_sheet.items():
-                    blocks.append(addon_block(rws, "Add on Covers"))
+                blocks += section_addon_blocks(addons, 1)    # add-on rows the quote or the user supplied (laghu quotes normally have none)
             elif n == 3:
                 desc = s.get("desc") or "All contents, first loss basis"
                 blocks.append({"type": "si_simple", "columns": ["Sr. no.", "Description", "Sum Insured (in INR)"],
@@ -96,11 +101,7 @@ def build(sec: dict, addons: list[dict], case_hdr: dict) -> tuple[list[dict], li
             else:
                 unbuilt.append(f"annexure for section {n} ({layout} layout)")
             if n in (1, 3) and addons:
-                by_sheet: dict[str, list] = {}
-                for r in kept(addons):
-                    by_sheet.setdefault(r["sheet"], []).append(r)
-                for i, (sh, rows) in enumerate(by_sheet.items(), 1):
-                    blocks.append(addon_block(rows, f"Add on Covers - {sh.strip()}"))
+                blocks += section_addon_blocks(addons, n)
         if blocks:
             out.append({"no": len(out) + 1, "applies_to_section": n, "title": f"ANNEXURE {len(out) + 1} – APPLICABLE TO SECTION {n}", "header": _hdr(case_hdr), "blocks": blocks})
     return out, unbuilt

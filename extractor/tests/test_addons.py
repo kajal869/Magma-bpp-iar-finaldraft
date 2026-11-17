@@ -74,3 +74,24 @@ def test_variant_scoping(tmp_path):
     rows, w = api.extract_rows(str(q), None)
     assert w and all(r["variant_unchosen"] for r in rows)
     assert all("variant_not_chosen" in r["needs_review"] for r in api.match_rows(rows, idx=lib(), aliases={}, ids={}) if r["decision"] != "drop")
+
+
+def test_burglary_cover_table_gets_section_3(tmp_path):
+    from extractor import annexures
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Plant"
+    rows = [["STANDARD FIRE & SPECIAL PERILS INSURANCE"], ["Add-on Covers", "Limit", "Magma Remarks"], ["Start Up Expenses", "", "Covered"], [],[],[],
+            ["BURGLARY & THEFT INSURANCE"], ["Cover Required"], ["Burglary", 1000000, "Covered upto FLB%"], ["Theft", 1000000, "Covered upto FLB%"],
+            ["Damage to property", "5% of SI", "Not covered"], ["Waiver of FIR", "5% of SI", "Covered upto 10K"]]
+    for r in rows:
+        ws.append(r)
+    q = tmp_path / "q.xlsx"
+    wb.save(q)
+    r = {x["name"]: x for x in api.match_rows(api.extract_rows(str(q))[0], idx=lib(), aliases={}, ids={})}
+    assert r["Start Up Expenses"]["section"] == 1
+    assert r["Theft"]["section"] == 3 and r["Waiver of FIR"]["section"] == 3
+    assert r["Burglary"]["decision"] == "drop" and r["Damage to property"]["decision"] == "drop"
+    blocks3 = annexures.section_addon_blocks(list(r.values()), 3)
+    assert [x["desc"] for x in blocks3[0]["rows"]] == ["Theft", "Waiver of FIR"]
+    assert [x["desc"] for x in annexures.section_addon_blocks(list(r.values()), 1)[0]["rows"]] == ["Start Up Expenses"]

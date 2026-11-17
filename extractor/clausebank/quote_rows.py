@@ -14,7 +14,7 @@ from .remarks import classify
 
 warnings.filterwarnings("ignore")
 
-TABLE_ANCHOR = re.compile(r"^\s*(?:add[\s\-]*ons?(?:\s+covers?)?|add[\s\-]*on\s+covers?|additional\s+clauses.*|add[\s\-]*on\s+covers?\s*(?:&|and)\s*clauses)\s*:?\s*$", re.I)
+TABLE_ANCHOR = re.compile(r"^\s*(?:cover\s+required|add[\s\-]*ons?(?:\s+covers?)?|add[\s\-]*on\s+covers?|additional\s+clauses.*|add[\s\-]*on\s+covers?\s*(?:&|and)\s*clauses)\s*:?\s*$", re.I)
 LIST_ANCHOR = re.compile(r"^\s*(?:conditions?\s*[,/]?\s*warranties.*|terms\s*/\s*conditions\s*/?\s*clauses?|conditions\s+applicable\s+to\s+all.*|special\s+conditions.*)\s*:?\s*$", re.I)
 HEADER_NAME = re.compile(r"^\s*(?:covers?|coverages?|clauses?|particulars)\s*:?\s*$", re.I)
 REMARK_HDR = re.compile(r"remark|insurer\s*terms?|status|magma|response|comment", re.I)
@@ -139,6 +139,25 @@ def _list_block(g, r0, namecol):
     return rows
 
 
+SECTION_HEADS = [(re.compile(r"burglary|house\s*breaking", re.I), 3), (re.compile(r"money\s+(?:insurance|cover)|cash\s+(?:insurance|cover)", re.I), 7),
+                 (re.compile(r"machinery\s+breakdown|\bmbd\b", re.I), 4), (re.compile(r"electronic\s+equipment\s+(?:insurance|cover)", re.I), 5),
+                 (re.compile(r"loss\s+of\s+profit|\bflop\b", re.I), 2), (re.compile(r"fire\s*&|special\s+perils|\bsfsp\b|fire\s+insurance", re.I), 1)]
+# deliberately narrow: only a heading that names a cover moves a table to another section; item rows such as "Plant & Machinery" must not
+
+
+def block_section(g, r0, span=15):
+    """Policy section a table belongs to: the nearest ALL-CAPS heading within 15 rows above the anchor that names a cover (default 1).
+    Title-case labels (column headers, item names) never move a table, so mixed layouts fall back to section 1 and are reviewed."""
+    for rr in range(r0 - 1, max(0, r0 - span), -1):
+        for v in g.get(rr, {}).values():
+            t = _txt(v)
+            if t and len(t) < 80 and not TABLE_ANCHOR.match(t) and (t.isupper() or re.match(r"^(?:section|annexure)", t, re.I)):
+                for rx, n in SECTION_HEADS:
+                    if rx.search(t):
+                        return n
+    return 1
+
+
 def extract(case, path):
     """-> list of quote-row dicts for one quote workbook."""
     out = []
@@ -155,14 +174,14 @@ def extract(case, path):
                     if blk:
                         has_table = True
                         for b in blk:
-                            out.append({**b, "case": case, "sheet": sheet, "hidden": hidden, "block": r, "row_type": "addon_row"})
+                            out.append({**b, "case": case, "sheet": sheet, "hidden": hidden, "block": r, "row_type": "addon_row", "section": block_section(g, r)})
         if not has_table:
             for r in sorted(g):
                 for c, v in sorted(g[r].items()):
                     name = _txt(v)
                     if name and len(name) < 90 and LIST_ANCHOR.match(name):
                         for b in _list_block(g, r, c):
-                            out.append({**b, "case": case, "sheet": sheet, "hidden": hidden, "block": r, "row_type": "condition_line"})
+                            out.append({**b, "case": case, "sheet": sheet, "hidden": hidden, "block": r, "row_type": "condition_line", "section": block_section(g, r)})
     seen, rows = set(), []
     for q in out:                                    # the same row can be reached by two anchors on one row
         k = (q["sheet"], q["row"])
@@ -174,7 +193,7 @@ def extract(case, path):
         else:
             c = classify(q["remark"])
             q.update(decision=c["decision"], cls=c["cls"], cited=c["cited"], conditional=c["conditional"])
-            if re.fullmatch(r"\s*fire\s*", q["name"], re.I):
+            if re.fullmatch(r"\s*(?:fire|burglary)\s*", q["name"], re.I):
                 q.update(decision="drop", cls="base_peril")
         q["key"] = f"{case}|{q['sheet']}|{q['row']}"
         rows.append(q)
