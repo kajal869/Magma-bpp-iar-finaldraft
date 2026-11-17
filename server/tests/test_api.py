@@ -258,3 +258,19 @@ def test_condition_lines_are_not_shown_as_dropped_addons(library, files, tmp_pat
     assert api["counts"]["pending"] >= 3 and all(r["row_type"] == "condition_line" for r in api["rows"])
     ui = analyze(files["slip"], q).json()
     assert ui["addons"] == [] and any("condition / warranty lines" in n for n in ui["notes"])
+
+
+def test_policy_number_is_never_filled_from_the_expiring_number(files, tmp_path):
+    import openpyxl
+    p = tmp_path / "renewal_slip.xlsx"
+    make_slip(p)
+    wb = openpyxl.load_workbook(p)
+    ws = wb["Closing Slip"]
+    for row in ws.iter_rows():
+        for c in row:
+            if isinstance(c.value, str) and c.value.startswith("If Renewal"):
+                ws.cell(row=c.row, column=c.column + 1, value="P0000000000/9999/100001")
+    wb.save(p)
+    d = analyze(p, files["quote"]).json()
+    f = {x["key"]: x for x in d["fields"]}["system.policy_no"]
+    assert f["value"] == "" and f["status"] == "missing" and "P0000000000/9999/100001" in (f["note"] or "")

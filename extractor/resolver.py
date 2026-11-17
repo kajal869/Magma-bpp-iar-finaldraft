@@ -39,6 +39,13 @@ def resolve(fields: list[Field]) -> list[Field]:
         others = [r for r in rest if r.source.get("tool") != top.source.get("tool")]
         disagree = [r for r in others if not same(kind, top.value, r.value)]
         agree = [r for r in others if same(kind, top.value, r.value)]
+        if disagree and group == "identity" and top.source.get("tool") == "slip":
+            # identity fields: the closing slip is preferred over the quote. The value is filled in from the slip, but flagged
+            # (check) with the quote's value as an alternative, so the disagreement is never invisible.
+            alts = [{"value": top.value, "source": top.source}] + [{"value": r.value, "source": r.source} for r in disagree]
+            quote_vals = ", ".join(str(r.value)[:10] if kind == "date" else str(r.value) for r in disagree)
+            out.append(Field(name, top.value, "check", top.source, alts, f"slip and quote disagree; the closing slip value is used (quote says {quote_vals})"))
+            continue
         if disagree:
             alts = [{"value": top.value, "source": top.source}] + [{"value": r.value, "source": r.source} for r in disagree]
             out.append(Field(name, None, "conflict", top.source, alts, f"{top.source.get('tool')} and {disagree[0].source.get('tool')} disagree; confirm which is right"))

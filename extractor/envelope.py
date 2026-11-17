@@ -25,6 +25,7 @@ FIELDS = {
     "premium.final": ("money", "money"),
     "premium.terrorism": ("money", "money"),
     "hypothecation": ("text", "identity"),
+    "policy.expiring_no": ("code", "identity"),
 }
 
 

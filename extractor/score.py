@@ -21,6 +21,7 @@ from .pipeline import run
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+NOT_SCORED = {"policy.expiring_no"}      # informational: the answer-key case JSON has no counterpart
 KEY_PATHS = {"insured.address": "insured.address_lines"}
 
 
@@ -55,6 +56,8 @@ def score_case(case: str, cfg: dict) -> dict:
     got = {f.field: f for f in res["fields"]}
     rows, tally = [], {"correct": 0, "flagged": 0, "missing": 0, "SILENT_WRONG": 0}
     for name, (kind, _) in FIELDS.items():
+        if name in NOT_SCORED:
+            continue
         truth = _get(key, KEY_PATHS.get(name, name))
         f = got.get(name)
         if f is None and truth in (None, 0, [], "", 0.0):
