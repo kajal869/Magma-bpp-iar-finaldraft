@@ -1,0 +1,207 @@
+/* Front-pack stylesheet. One theme class on <body>: theme-mann | theme-valmet | theme-laghu.
+   Geometry measured from the reference PDFs (A4, 1in side margins, Calibri 11pt). */
+
+:root {
+  --bar: #17365D; --bar-fg: #fff;
+  --head: #44546A; --head-fg: #fff;
+  --tbl-head: #17365D; --tbl-head-fg: #fff;
+  --grp: #C7D9F0; --total: #E5B8B7; --grand: #FFC000;
+  --border: #000;
+}
+.theme-valmet { --head: #44546A; --tbl-head: #BFBFBF; --tbl-head-fg: #000; }
+.theme-laghu  { --bar: #3B4558; --head: #3B4558; --tbl-head: #BFBFBF; --tbl-head-fg: #000; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-variant-ligatures: none; font-family: Calibri, Carlito, "Segoe UI", sans-serif; font-size: 11pt; line-height: 1.22; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+p { margin: 0 0 11pt 0; }
+b, .b { font-weight: 700; }
+.page-break { break-before: page; }
+.land { page: land; break-before: page; }
+.avoid { break-inside: avoid; }
+
+/* ---------- Risk Assumption Letter ---------- */
+.ral { padding-top: 8pt; }
+.ral .date { font-weight: 700; margin: 8pt 0 14pt 0; }
+.ral .to { margin-bottom: 14pt; }
+.ral .to br.gap { display: block; content: ''; margin-top: 11pt; }
+.ral-mann p, .ral-valmet p { text-align: justify; }
+.ral .to .nm { font-weight: 700; }
+.ral .subject { font-weight: 700; margin: 12pt 0 14pt 0; }
+.ral-mann .subject { text-align: left; }
+.ral-valmet .subject { text-align: center; }
+.ral-valmet .date { font-weight: 400; }
+.ral-valmet .date b { font-weight: 700; }
+.ral-shreeji .date { padding-left: 4pt; }
+.ral-shreeji .subject { text-align: center; text-decoration: underline; margin: 12pt 0 22pt 0; }
+.ral-shreeji p { margin-bottom: 14pt; }
+.ral a { color: #0563C1; text-decoration: underline; }
+.ral .sign { margin-top: 12pt; }
+.ral .sign img { height: 27pt; display: block; margin: 4pt 0 0 0; }
+.ral .sign .co { font-weight: 700; }
+
+/* ---------- Schedule ---------- */
+.bar { background: var(--bar); color: var(--bar-fg); font-weight: 700; padding: 1pt 3pt; margin: 0; }
+.bar.center { text-align: center; }
+.sched-title { margin-bottom: 8pt; }
+.kv { display: grid; grid-template-columns: 186pt 1fr; column-gap: 0; row-gap: 0; margin: 2pt 0 10pt 0; }
+.kv .k { padding: 0; }
+.kv .v { padding: 0 0 0 12pt; white-space: pre-line; position: relative; }
+.kv .v.bold { font-weight: 700; }
+.kv .v::before { content: ":"; position: absolute; left: 0; }
+.kv .v b { font-weight: 700; }
+.theme-laghu .kv { grid-template-columns: 145pt 1fr; }
+.sec-table { width: 100%; border-collapse: collapse; margin: 14pt 0 12pt 0; }
+.sec-table th { background: var(--head); color: var(--head-fg); text-align: left; font-weight: 700; padding: 1pt 4pt; border: 0.75pt solid #000; vertical-align: top; }
+.sec-table th.r, .sec-table td.r { text-align: right; }
+.sec-table td { border: 0.75pt solid #000; padding: 0 4pt; vertical-align: top; height: 14.3pt; }
+.sec-table td.sec { width: 15.5%; white-space: nowrap; }
+.sec-table td.si { width: 20.5%; }
+.sec-table td.pr { width: 15.5%; }
+.sec-table td.nb { border-top: 0.75pt solid #000; }
+.sec-table td.sub { border-left: 0.75pt solid #000; }
+.theme-laghu .sec-table th { text-align: center; }
+.theme-laghu .sec-table th.r { text-align: center; }
+
+/* ---------- Terms ---------- */
+.terms h4 { font-size: 11pt; font-weight: 700; margin: 12pt 0 6pt 0; }
+.terms .grp-title { font-weight: 700; margin: 12pt 0 8pt 0; }
+.terms ul { list-style: none; margin: 0; padding: 0; }
+.terms li { position: relative; padding-left: 28pt; margin: 0 0 1pt 0; }
+.terms li.bl { font-weight: 700; margin-top: 8pt; margin-bottom: 8pt; }
+.terms li::before { content: "\27A2"; position: absolute; left: 12pt; font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif; font-size: 10pt; }
+.terms .sub-title { font-weight: 400; margin: 6pt 0 5pt 12pt; }
+.terms table.ded { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt 0; }
+.terms table.ded td { border: 0.75pt solid #000; padding: 1pt 4pt; vertical-align: top; }
+.terms table.ded td:first-child { width: 33%; }
+.terms .excess-line { margin: 0 0 3pt 0; }
+.terms-head { font-weight: 700; margin: 12pt 0 8pt 0; }
+
+/* ---------- Summary tables ---------- */
+.sum-bar { background: var(--bar); color: #fff; font-weight: 700; padding: 0 3pt; margin: 20pt 0 10pt 0; }
+.theme-laghu .sum-bar { font-weight: 400; }
+table.grid { border-collapse: collapse; margin: 0 0 6pt 0; }
+table.grid th { background: var(--bar); color: #fff; font-weight: 700; padding: 0 4pt; border: 0.75pt solid #000; text-align: left; }
+table.grid td { border: 0.75pt solid #000; padding: 0 4pt; }
+table.grid td.r, table.grid th.r { text-align: right; }
+table.grid td.c, table.grid th.c { text-align: left; }
+.theme-laghu table.grid td.c, .theme-laghu table.grid th.c { text-align: center; }
+table.grid { break-inside: avoid; }
+.sum-bar { break-after: avoid; }
+table.prem { width: 100%; margin-left: 0; }
+table.prem td:first-child, table.prem th:first-child { width: 61%; }
+table.prem td { font-weight: 700; }
+table.prem td.r { font-weight: 700; }
+table.coin { width: 100%; }
+table.coin td, table.hyp td { font-weight: 400; }
+table.hyp td { font-weight: 400; }
+.theme-laghu table.hyp td.nm { font-weight: 700; }
+table.hyp { width: 100%; }
+
+/* ---------- GST / signature ---------- */
+.gst p { margin: 0 0 11pt 0; }
+.gst.newpage { break-before: page; }
+.gst .lines p { margin: 0; }
+.gst .legal { margin: 14pt 0 11pt 0; }
+.witness { margin: 11pt 0 10pt 0; }
+.sigblock { display: flex; justify-content: flex-end; margin-top: 18pt; }
+.sigblock .box { text-align: right; width: 245pt; }
+.sigblock img { height: 40pt; display: block; margin: 4pt 0 0 auto; }
+.sigblock .co { font-weight: 700; }
+.place { font-weight: 700; margin: 12pt 0 18pt 0; }
+.note-bold { font-weight: 700; margin: 8pt 0 10pt 0; }
+
+/* ---------- Annexures ---------- */
+.annex { break-before: page; }
+.annex h3 { text-align: center; font-size: 11pt; font-weight: 700; margin: 4pt 0 8pt 0; }
+.annex h3.sub { margin-bottom: 14pt; }
+.annex .kv { grid-template-columns: 119pt 1fr; margin-bottom: 10pt; }
+.annex .kv .k { font-weight: 700; }
+.annex .heading { font-weight: 700; text-decoration: underline; margin: 10pt 0 4pt 0; }
+table.at { width: 100%; border-collapse: collapse; margin: 4pt 0 10pt 0; }
+table.at th { background: var(--tbl-head); color: var(--tbl-head-fg); font-weight: 700; text-align: left; padding: 1pt 4pt; border: 0.75pt solid #000; vertical-align: top; }
+table.at td { border: 0.75pt solid #000; padding: 0 4pt; vertical-align: top; }
+table.at td.r, table.at th.r { text-align: right; }
+table.at td.c, table.at th.c { text-align: center; }
+table.at tr.grp td { background: var(--grp); font-weight: 700; }
+table.at tr.tot td { background: var(--total); font-weight: 700; }
+table.at tr.grand td { background: var(--grand); font-weight: 700; }
+.theme-valmet table.at tr.tot td, .theme-laghu table.at tr.tot td,
+.theme-valmet table.at tr.grand td, .theme-laghu table.at tr.grand td { background: #fff; text-align: center; }
+.theme-valmet table.at tr.tot td.r, .theme-laghu table.at tr.tot td.r,
+.theme-valmet table.at tr.grand td.r, .theme-laghu table.at tr.grand td.r { text-align: right; }
+table.at td.srn { width: 7%; text-align: left; }
+table.at.matrix { font-size: 9pt; }
+table.at.matrix th, table.at.matrix td { font-size: 9pt; }
+table.at.matrix th { background: #fff; color: #000; border: 0; text-align: center; vertical-align: bottom; }
+table.at.matrix td { border: 0; vertical-align: top; }
+table.at.matrix td.addr { width: 17%; }
+table.at.matrix td.occ { width: 14%; }
+table.at.matrix tr.tot td { background: #fff; font-weight: 700; }
+table.at.loc td.r, table.at.loc td.c { text-align: center; vertical-align: middle; }
+.annex .note { margin: 6pt 0; }
+
+/* annexure header label widths per theme */
+.theme-mann .annex .kv { grid-template-columns: 96pt 1fr; }
+.theme-valmet .annex .kv { grid-template-columns: 125pt 1fr; }
+.theme-laghu .annex .kv { grid-template-columns: 92pt 1fr; }
+
+.landwrap { page: land; break-before: page; break-after: page; }
+.theme-laghu body, body.theme-laghu { font-size: 11pt; }
+.theme-valmet table.at.matrix th, .theme-valmet table.at.matrix td { border: 0.75pt solid #000; font-size: 10pt; padding: 1pt 4pt; }
+.theme-valmet table.at.matrix th { font-weight: 700; }
+.theme-valmet table.at.matrix tr.tot td { font-weight: 700; }
+
+tr { break-inside: avoid; }
+thead { display: table-header-group; }
+
+/* Tuning pass */
+table.at td { padding: 3pt 4pt; }
+table.at.addons td:last-child, table.at.addons th:last-child { width: 34%; }
+.theme-valmet table.at.addons td:last-child, .theme-valmet table.at.addons th:last-child { width: 40%; }
+table.at.groups th { background: #BFBFBF; color: #000; }
+.annex.gray table.at th { background: #BFBFBF; color: #000; }
+table.at.keep, table.at.groups { break-inside: avoid; }
+.annex .heading { break-after: avoid; }
+table.at.matrix td { padding: 1pt 4pt; }
+
+/* Values taken from the official Word source (Daechang docx): Calibri 11, body line 14pt exact, table lines ~11.25pt,
+   cell side margins 3pt, row min-height 15.5pt, palette 17365D / 44546A / BFBFBF / E5B8B7 / D0CECE. */
+p, .terms li, .ral div { line-height: 14pt; }
+p { margin-bottom: 6pt; }
+.ral p { margin-bottom: 14pt; }
+table.at td, table.at th, .sec-table td, .sec-table th, table.grid td, table.grid th { line-height: 11.25pt; }
+table.at td { padding: 2pt 3pt; }
+table.at th { padding: 2pt 3pt; }
+.sec-table td { padding: 2pt 3pt; height: 15.5pt; }
+.sec-table th { padding: 2pt 3pt; }
+table.grid td, table.grid th { padding: 1.5pt 3pt; }
+
+.theme-mann table.at.addons td { padding: 9pt 3pt; }
+.theme-mann table.at.groups td { padding: 2.5pt 3pt; }
+
+/* ---------- wording book ---------- */
+.wording { break-before: auto; }
+.wording.np { break-before: page; }
+.wording p.w { margin: 0 0 3pt 0; line-height: 1.18; text-align: justify; font-stretch: 95%; letter-spacing: -0.1pt; }
+.wording p.w.wh { font-weight: 700; margin-top: 8pt; text-align: left; }
+
+/* Audit fixes */
+.sum-bar.tbar { margin: 14pt 0 8pt 0; }
+.theme-mann table.at.addons th { background: #0F4761; }
+.annex.gray table.at.addons th { background: #BFBFBF; color: #000; }
+.ab.big { break-before: page; }
+.loc-caption { background: #E5B8B7; font-weight: 700; text-align: center; margin-top: 190pt; padding: 1pt 0; }
+.terms table.ded { break-inside: avoid; }
+.terms table.ded th { background: #fff; color: #000; text-align: left; font-weight: 700; border: 0.75pt solid #000; padding: 1pt 4pt; }
+.theme-valmet .sec-table td { height: 14.6pt; padding-top: 1.5pt; padding-bottom: 1.5pt; }
+.theme-valmet .kv { margin-bottom: 7pt; }
+
+.terms .grp-title, .terms .sub-title { break-after: avoid; }
+
+.annex.plainlbl .kv .k { font-weight: 400; }
+.theme-laghu .annex .kv .v { font-weight: 700; }
+
+table.wt { width: 100%; border-collapse: collapse; margin: 4pt 0 6pt 0; font-size: 9.5pt; line-height: 1.1; }
+table.wt td { border: 0.75pt solid #000; padding: 1.5pt 3pt; vertical-align: top; }
+table.wt tr { break-inside: avoid; }

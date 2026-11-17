@@ -1,0 +1,465 @@
+{
+  "schema_version": "0.1",
+  "case_id": "demo_laghu",
+  "product": {
+    "code": 9987,
+    "name": "Business Protect Policy (Laghu Udyam)",
+    "title_upper": "BUSINESS PROTECT POLICY (LAGHU UDYAM)",
+    "uin": "IRDAN149CP0001V01202122",
+    "wording_book": "bpp_laghu"
+  },
+  "options": {
+    "append_clause_wordings": false,
+    "clause_wording_ids": [],
+    "show_signature": false,
+    "wording_sections": [
+      1,
+      3,
+      7
+    ],
+    "wording_book": "bpp_laghu",
+    "endorsement_blocks": []
+  },
+  "system": {
+    "policy_no": "P0099900001/9999/900001",
+    "issue_date": "2026-03-28",
+    "magma_gstin": "29AAGCM0000A1Z0",
+    "gst_invoice_no": "POL2900000000001",
+    "gst_invoice_date": "2026-03-28",
+    "previous_gst_invoice_no": null,
+    "sac_code": "997133",
+    "sac_description": "Accident and health insurance services",
+    "place_of_supply": {
+      "state": "KARNATAKA",
+      "code": "29"
+    },
+    "reverse_charge": false,
+    "stamp_duty": {
+      "order_no": "LoA/DEMO/0001/2026",
+      "order_date": "2026-03-01"
+    },
+    "signed_at": "Mumbai",
+    "signed_on": "2026-03-28",
+    "servicing_office": {
+      "code": "900001",
+      "address_lines": [
+        "UNIT 5, EXAMPLE BUSINESS CENTRE, MG ROAD,",
+        "BENGALURU -560001",
+        "KARNATAKA"
+      ],
+      "phone": "(1800) 2663202"
+    }
+  },
+  "insured": {
+    "name": "ACME PRECISION PRODUCTS PRIVATE LIMITED",
+    "gstin": "29ABCDE1234F1Z5",
+    "address_lines": [
+      "PLOT 10, EXAMPLE INDUSTRIAL AREA,",
+      "BENGALURU 560001 KARNATAKA"
+    ],
+    "address_lines_ral": [
+      "PLOT 10, EXAMPLE INDUSTRIAL AREA,",
+      "BENGALURU 560001 KARNATAKA"
+    ],
+    "business_activity": "LIGHT ENGINEERING WORKSHOP",
+    "occupancy": "Workshop and office"
+  },
+  "period": {
+    "start": "2026-04-01",
+    "end": "2027-03-31",
+    "start_time": "00:01"
+  },
+  "intermediary": {
+    "name": "SAMPLE BROKING SERVICES PRIVATE LIMITED",
+    "code": "BRC0000000",
+    "mobile": "9000000000",
+    "email": "broker@example.com",
+    "kind": "agent_broker"
+  },
+  "schedule": {
+    "sections": [
+      {
+        "no": 1,
+        "label": "Fire Insurance Cover",
+        "sum_insured": 80000000,
+        "premium": 24000
+      },
+      {
+        "no": 2,
+        "label": "Fire Loss of Profit Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 3,
+        "label": "Burglary and Housebreaking Cover",
+        "sum_insured": 10000000,
+        "premium": 1000
+      },
+      {
+        "no": 4,
+        "label": "Machinery Breakdown Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 5,
+        "label": "Electronic Equipment Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 6,
+        "label": "Boiler and Pressure Plant Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 7,
+        "label": "Money/Cash Cover - Money in Safe",
+        "sum_insured": 300000,
+        "premium": 50,
+        "sub_rows": [
+          {
+            "label": "Cash at/till Counter",
+            "sum_insured": 300000,
+            "premium": 50
+          },
+          {
+            "label": "Money in Transit –Estimated Annual Transit",
+            "sum_insured": 600000,
+            "premium": 60
+          }
+        ]
+      },
+      {
+        "no": 8,
+        "label": "Fidelity Cover – Aggregate Limit",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 9,
+        "label": "All Risk Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 10,
+        "label": "Plate Glass Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 11,
+        "label": "Neon Sign/Glow Sign Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 12,
+        "label": "Baggage Cover",
+        "sum_insured": null,
+        "premium": null
+      },
+      {
+        "no": 13,
+        "label": "Public Liability",
+        "sum_insured": null,
+        "premium": null
+      }
+    ]
+  },
+  "premium": {
+    "basic": 25160.0,
+    "terrorism": 0,
+    "net": 25160.0,
+    "taxes": [
+      {
+        "type": "CGST",
+        "rate": 0.09,
+        "amount": 2264.4
+      },
+      {
+        "type": "SGST",
+        "rate": 0.09,
+        "amount": 2264.4
+      }
+    ],
+    "final": 29689.0
+  },
+  "coinsurance": [
+    {
+      "insurer": "Magma General Insurance Ltd.",
+      "share_pct": 100
+    }
+  ],
+  "hypothecation": [
+    "SAMPLE BANK LIMITED"
+  ],
+  "terms": {
+    "section_conditions": [
+      {
+        "key": "S1",
+        "title": "SECTION 1 –FIRE INSURANCE COVER",
+        "lines": [
+          "Earthquake (Fire & Shock) Cover",
+          "Sabotage & Terrorism Damage Cover Exclusion",
+          "No cover for Kutcha Construction",
+          "Excluding Properties of clients/customers/guests/employees",
+          "Excluding money, monetary instruments and valuables of every kind and description",
+          "Warranted existing protection, detection and alarm system to be maintained in well working conditions throughout the policy period",
+          "Transmission and Distribution lines (if any) outside the insured premises are not covered."
+        ]
+      },
+      {
+        "key": "S3",
+        "title": "SECTION 3 – BURGLARY AND HOUSEBREAKING COVER",
+        "lines": [
+          "Terrorism cover is excluded.",
+          "Theft and RSMD not covered",
+          "Warranted existing protection, detection and alarm system to be maintained in well working condition throughout the policy period"
+        ]
+      },
+      {
+        "key": "S7",
+        "title": "SECTION 7 – MONEY INSURANCE COVER",
+        "lines": [
+          "Transit Details - From Insured Showroom to various Banks/ Other Financial Organization and vice versa within a radius of 25 Kms from the insured premises"
+        ],
+        "sub_groups": [
+          {
+            "title": "Cash in Safe / Counter / Till -",
+            "lines": [
+              "Warranted money not to be left unattended anytime anywhere",
+              "Warranted existing protection, detection and alarm system to be maintained in well working conditions throughout the policy period",
+              "Terrorism cover is excluded",
+              "Maximum per location limit is INR 5 Lac"
+            ]
+          },
+          {
+            "title": "Cash in Transit -",
+            "lines": [
+              "Warranted money not to be left unattended anytime anywhere",
+              "Terrorism cover is excluded"
+            ]
+          }
+        ]
+      }
+    ],
+    "all_sections_conditions": {
+      "key": "ALL",
+      "title": "CONDITIONS APPLICABLE TO ALL SECTIONS",
+      "lines": [
+        "Agreed Bank Clause",
+        "Sanctions, Limitation and Exclusion Clause",
+        "Cyber Loss Limited Exclusion Clause ~ LMA5410 (amended)",
+        "Communicable Disease Exclusion Clause",
+        "All other terms and conditions as per Magma GIL Business Protect (Laghu Udyam) Policy Wordings"
+      ]
+    },
+    "deductibles": [
+      {
+        "key": "S1",
+        "title": "SECTION 1 – FIRE INSURANCE COVER",
+        "lines": [
+          "All other perils except terrorism- 5% of claim amount subject to minimum of INR 10,000 (Rupees Ten Thousand) for each & every claim"
+        ]
+      },
+      {
+        "key": "S3",
+        "title": "SECTION 3 – BURGLARY AND HOUSEBREAKING COVER",
+        "lines": [
+          "5% of claim amount subject to minimum of INR 5,000 for each and every claim"
+        ]
+      },
+      {
+        "key": "S7",
+        "title": "SECTION 7 – MONEY INSURANCE COVER",
+        "lines": [
+          "5% of claim amount subject to minimum of INR 5,000 for each and every claim"
+        ]
+      }
+    ]
+  },
+  "annexures": [
+    {
+      "no": 1,
+      "applies_to_section": 1,
+      "title": "ANNEXURE 1 – APPLICABLE TO SECTION 1",
+      "header": {
+        "insured": "ACME PRECISION PRODUCTS PRIVATE LIMITED",
+        "risk_location": "PLOT 10, EXAMPLE INDUSTRIAL AREA, BENGALURU 560001 KARNATAKA",
+        "business_activity": "LIGHT ENGINEERING WORKSHOP",
+        "occupancy": "Workshop and office"
+      },
+      "blocks": [
+        {
+          "type": "si_simple",
+          "columns": [
+            "Sr. no.",
+            "Description",
+            "Sum Insured (in INR)"
+          ],
+          "rows": [
+            {
+              "sr": 1,
+              "desc": "Building",
+              "si": 60000000
+            },
+            {
+              "sr": 2,
+              "desc": "FFF, Electronic Equipment, Computer, Electronic Equipment’s and All Other Contents.",
+              "si": 20000000
+            }
+          ],
+          "total": 80000000,
+          "total_label": "Total Sum Insured"
+        },
+        {
+          "type": "si_simple",
+          "heading": "Inbuilt Cover",
+          "columns": [
+            "Sr. no.",
+            "Description",
+            "Sum Insured (in INR)"
+          ],
+          "rows": [
+            {
+              "sr": 1,
+              "desc": "Earthquake (Fire & Shock) Cover",
+              "si": 80000000
+            },
+            {
+              "sr": 2,
+              "desc": "STFI",
+              "si": 80000000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "no": 2,
+      "applies_to_section": 3,
+      "title": "ANNEXURE 2 – APPLICABLE TO SECTION 3",
+      "header": {
+        "insured": "ACME PRECISION PRODUCTS PRIVATE LIMITED",
+        "risk_location": "PLOT 10, EXAMPLE INDUSTRIAL AREA, BENGALURU 560001 KARNATAKA",
+        "business_activity": "LIGHT ENGINEERING WORKSHOP",
+        "occupancy": "Workshop and office"
+      },
+      "blocks": [
+        {
+          "type": "si_simple",
+          "columns": [
+            "Sr. no.",
+            "Description",
+            "Sum Insured (in INR)"
+          ],
+          "rows": [
+            {
+              "sr": 1,
+              "desc": "All contents of P&M, FFF and stocks as mentioned above, First loss basis - 100%",
+              "si": 10000000
+            }
+          ],
+          "total": 10000000,
+          "total_label": "Total Sum Insured"
+        },
+        {
+          "type": "note",
+          "text": "First Loss Basis @ 100%"
+        },
+        {
+          "type": "note",
+          "text": "First Loss Sum Insured – INR. 10,000,000"
+        }
+      ]
+    },
+    {
+      "no": 3,
+      "applies_to_section": 7,
+      "title": "ANNEXURE 3 – APPLICABLE TO SECTION 7",
+      "header": {
+        "insured": "ACME PRECISION PRODUCTS PRIVATE LIMITED",
+        "risk_location": "PLOT 10, EXAMPLE INDUSTRIAL AREA, BENGALURU 560001 KARNATAKA",
+        "business_activity": "LIGHT ENGINEERING WORKSHOP",
+        "occupancy": "Workshop and office"
+      },
+      "blocks": [
+        {
+          "type": "kv_rows",
+          "columns": [
+            "Sum Insured Component",
+            "Sum Insured (in INR)"
+          ],
+          "rows": [
+            [
+              "Money In Transit (Estimated Annual Transit)",
+              600000
+            ],
+            [
+              "Money In Transit (Single Carrying Limit)",
+              300000
+            ],
+            [
+              "Cash in safe / strong room",
+              300000
+            ],
+            [
+              "Cash at/till Counter",
+              300000
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "presentation": {
+    "header_policy_prefix": "Policy No. ",
+    "ral_first_line_prefix": "Policy No. ",
+    "schedule_title": "BUSINESS PROTECT POLICY (LAGHU UDYAM) SCHEDULE/INVOICE",
+    "gst_label": "GST No.",
+    "period_template": "From {start_time}hrs {start} To Midnight of {end}",
+    "intermediary_style": "agent_broker_dash",
+    "premium_summary_decimals": 2,
+    "premium_summary_tax_labels": "CGST @9% / SGST @9%",
+    "footer_product_text": "BUSINESS PROTECT POLICY (LAGHU UDYAM)",
+    "footer_style": "shreeji",
+    "page_number_style": "Page {n} of {total}",
+    "ral_signatory_lines": [
+      "For Magma General Insurance Limited",
+      "(Erstwhile Magma HDI General Insurance Company Limited)",
+      "Authorized Signatory"
+    ],
+    "gst_signatory_lines": [
+      "For MAGMA GENERAL INSURANCE LTD.",
+      "Duly Constituted Attorney"
+    ],
+    "tax_invoice_note_uin": true,
+    "theme": "laghu",
+    "ral_variant": "shreeji",
+    "label_policy_no": "Policy no.",
+    "label_insured": "INSURED NAME",
+    "gst_before_address": false,
+    "policy_details_text": "As per Section Annexure",
+    "gst_magma_label": "GST Number of Magma - ",
+    "stamp_duty_style": "period",
+    "label_phone_intermediary": null,
+    "wording_scale": 1.0,
+    "bold_line_prefixes": [],
+    "gst_new_page": true,
+    "note_position": "after_sign",
+    "location_caption": null,
+    "annex_occupancy_first": true
+  },
+  "provenance": {
+    "sources": {
+      "note": "Synthetic demo data. All names, identifiers and amounts are fictional."
+    },
+    "field_sources": {},
+    "conflicts": [],
+    "deviations_from_issued": []
+  }
+}

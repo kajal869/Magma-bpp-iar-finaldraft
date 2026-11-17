@@ -1,0 +1,47 @@
+# Never commit customer data (names, GSTINs, policy numbers, premiums), issued policies or customer workbooks.
+app/cases/*
+!app/cases/demo_laghu.json
+samples/*
+!samples/make_samples.py
+!samples/demo_closing_slip.xlsx
+!samples/demo_quote.xlsx
+*.pdf
+app/out/
+app/wording/
+app/assets_raw/
+
+# tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+web/dist/
+.DS_Store
+*.tsbuildinfo
+
+# Team reference folders and private extractor data (customer text; never commit)
+Magma_Aaron/
+Magma_Floyd/
+Magma_Kajal/
+**/_cache/
+**/review/
+**/work/
+**/tests/real/
+**/system_inputs.*.json
+**/out/
+*.docx
+
+# extractor private inputs
+extractor/cases.local.json
+extractor/clausebank/data/
+
+# local tooling
+.claude/
+extractor/baseline.local.json
+
+# internal planning notes: contain real customer names and figures
+INTEGRATION_HANDOVER.md
+INTEGRATION_PLAN.md
+TEAM_CODE_ANALYSIS_AND_PLAN.md
+.pytest_cache/

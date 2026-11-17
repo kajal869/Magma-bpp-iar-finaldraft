@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magma-bpp-policy-v0.1",
+  "title": "Magma BPP/IAR policy draft data",
+  "description": "Single input for the HTML template. Groups: product/options (house conventions), system (not in slip/quote), insured/period/intermediary (slip+quote), schedule/premium/terms/annexures (slip+quote+rules). Absent value = null with a reason in provenance, never an invented value.",
+  "type": "object",
+  "required": ["schema_version", "case_id", "product", "options", "system", "insured", "period", "intermediary", "schedule", "premium", "coinsurance", "hypothecation", "terms", "annexures", "presentation", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "case_id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+
+    "product": {
+      "type": "object",
+      "required": ["code", "name", "title_upper", "uin", "wording_book"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "integer"},
+        "name": {"type": "string"},
+        "title_upper": {"type": "string", "description": "Text shown in footer and schedule title."},
+        "uin": {"type": "string", "pattern": "^IRDAN[0-9A-Z]+$"},
+        "wording_book": {"enum": ["bpp_commercial_a", "bpp_commercial_b", "bpp_laghu"], "description": "Wording version: _a = older Fire wording (Mann), _b = clause-style Commercial wording (Valmet)."}
+      }
+    },
+
+    "options": {
+      "type": "object",
+      "description": "Per-case house conventions. Explicit, never guessed.",
+      "required": ["append_clause_wordings", "show_signature", "wording_sections"],
+      "additionalProperties": false,
+      "properties": {
+        "append_clause_wordings": {"type": "boolean"},
+        "clause_wording_ids": {"type": "array", "items": {"type": "string"}, "description": "Ids into the Wording Library (clauses.json, Phase 2)."},
+        "show_signature": {"type": "boolean"},
+        "wording_book": {"enum": ["bpp_commercial_a", "bpp_commercial_b", "bpp_laghu"]},
+        "endorsement_blocks": {"type": "array", "items": {"type": "string", "pattern": "^endorse_s[0-9]{2}$"}, "description": "Appended section wordings (blocks of the wording book) shown after General Conditions."},
+        "wording_sections": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 13}, "description": "Sections whose wording is included in the policy book."}
+      }
+    },
+
+    "system": {
+      "type": "object",
+      "description": "Values that come from the GC system / masters, not from slip or quote.",
+      "required": ["policy_no", "issue_date", "magma_gstin", "gst_invoice_no", "gst_invoice_date", "sac_code", "sac_description", "place_of_supply", "reverse_charge", "stamp_duty", "signed_at", "servicing_office"],
+      "additionalProperties": false,
+      "properties": {
+        "policy_no": {"type": "string", "pattern": "^P[0-9]{10}/[0-9]{4}/[0-9]{6}$"},
+        "issue_date": {"$ref": "#/$defs/date"},
+        "magma_gstin": {"$ref": "#/$defs/gstin"},
+        "gst_invoice_no": {"type": "string"},
+        "gst_invoice_date": {"$ref": "#/$defs/date"},
+        "previous_gst_invoice_no": {"type": ["string", "null"]},
+        "sac_code": {"type": "string"},
+        "sac_description": {"type": "string"},
+        "place_of_supply": {
+          "type": "object", "required": ["state", "code"], "additionalProperties": false,
+          "properties": {"state": {"type": "string"}, "code": {"type": "string", "pattern": "^[0-9]{2}$"}}
+        },
+        "reverse_charge": {"type": "boolean"},
+        "stamp_duty": {
+          "type": "object", "required": ["order_no", "order_date"], "additionalProperties": false,
+          "properties": {"order_no": {"type": "string"}, "order_date": {"$ref": "#/$defs/date"}}
+        },
+        "signed_at": {"type": "string"},
+        "signed_on": {"$ref": "#/$defs/date"},
+        "servicing_office": {
+          "type": "object", "required": ["code", "address_lines"], "additionalProperties": false,
+          "properties": {"code": {"type": "string"}, "address_lines": {"type": "array", "items": {"type": "string"}}, "phone": {"type": "string"}}
+        }
+      }
+    },
+
+    "insured": {
+      "type": "object",
+      "required": ["name", "gstin", "address_lines", "business_activity", "occupancy"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "gstin": {"$ref": "#/$defs/gstin"},
+        "address_lines": {"type": "array", "items": {"type": "string"}, "description": "As printed in the Schedule."},
+        "address_lines_ral": {"type": "array", "items": {"type": "string"}, "description": "As printed in the Risk Assumption Letter, when different."},
+        "business_activity": {"type": ["string", "null"]},
+        "occupancy": {"type": ["string", "null"]}
+      }
+    },
+
+    "period": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {"start": {"$ref": "#/$defs/date"}, "end": {"$ref": "#/$defs/date"}, "start_time": {"type": "string", "default": "00:01"}}
+    },
+
+    "intermediary": {
+      "type": "object",
+      "required": ["name", "code", "mobile", "email"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "code": {"type": ["string", "null"]},
+        "mobile": {"type": ["string", "null"]},
+        "email": {"type": ["string", "null"]},
+        "kind": {"enum": ["agent_broker", "imd"]}
+      }
+    },
+
+    "schedule": {
+      "type": "object",
+      "required": ["sections"],
+      "additionalProperties": false,
+      "properties": {
+        "sections": {
+          "type": "array", "minItems": 13,
+          "items": {
+            "type": "object",
+            "required": ["no", "label", "sum_insured", "premium"],
+            "additionalProperties": false,
+            "properties": {
+              "no": {"type": "integer", "minimum": 1, "maximum": 13},
+              "label": {"type": "string"},
+              "sum_insured": {"$ref": "#/$defs/moneyOrNull"},
+              "premium": {"$ref": "#/$defs/moneyOrNull"},
+              "sub_rows": {
+                "type": "array",
+                "description": "Extra lines under a section (Section 7 money sub-covers).",
+                "items": {"type": "object", "required": ["label", "sum_insured", "premium"], "additionalProperties": false,
+                  "properties": {"label": {"type": "string"}, "sum_insured": {"$ref": "#/$defs/moneyOrNull"}, "premium": {"$ref": "#/$defs/moneyOrNull"}}}
+              }
+            }
+          }
+        },
+        "extra_rows": {"type": "array", "description": "Trailing unnumbered rows (e.g. Public Liability).", "items": {"type": "object", "required": ["label", "sum_insured", "premium"], "properties": {"label": {"type": "string"}, "sum_insured": {"$ref": "#/$defs/moneyOrNull"}, "premium": {"$ref": "#/$defs/moneyOrNull"}}}}
+      }
+    },
+
+    "premium": {
+      "type": "object",
+      "required": ["basic", "terrorism", "net", "taxes", "final"],
+      "additionalProperties": false,
+      "properties": {
+        "basic": {"type": "number"},
+        "terrorism": {"type": "number"},
+        "net": {"type": "number"},
+        "taxes": {
+          "type": "array", "minItems": 1,
+          "items": {"type": "object", "required": ["type", "rate", "amount"], "additionalProperties": false,
+            "properties": {"type": {"enum": ["IGST", "CGST", "SGST"]}, "rate": {"type": "number"}, "amount": {"type": "number"}}}
+        },
+        "final": {"type": "number"}
+      }
+    },
+
+    "coinsurance": {"type": "array", "items": {"type": "object", "required": ["insurer", "share_pct"], "additionalProperties": false, "properties": {"insurer": {"type": "string"}, "share_pct": {"type": "number"}}}},
+    "hypothecation": {"type": "array", "items": {"type": "string"}, "description": "Financier names; [\"N.A.\"] when none."},
+
+    "terms": {
+      "type": "object",
+      "required": ["section_conditions", "all_sections_conditions", "deductibles"],
+      "additionalProperties": false,
+      "properties": {
+        "section_conditions": {"type": "array", "items": {"$ref": "#/$defs/textGroup"}},
+        "all_sections_conditions": {"$ref": "#/$defs/textGroup"},
+        "deductibles": {"type": "array", "items": {"$ref": "#/$defs/textGroup"}}
+      }
+    },
+
+    "annexures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["no", "title", "header", "blocks"],
+        "additionalProperties": false,
+        "properties": {
+          "no": {"type": "integer"},
+          "applies_to_section": {"type": "integer"},
+          "title": {"type": "string"},
+          "header": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+              "insured": {"type": "string"},
+              "risk_location": {"type": "string"},
+              "business_activity": {"type": ["string", "null"]},
+              "occupancy": {"type": ["string", "null"]}
+            }
+          },
+          "blocks": {"type": "array", "items": {"$ref": "#/$defs/block"}}
+        }
+      }
+    },
+
+    "presentation": {
+      "type": "object",
+      "description": "House text variants that differ per case. Rendering only; no business value.",
+      "additionalProperties": true
+    },
+
+    "provenance": {
+      "type": "object",
+      "required": ["sources", "field_sources", "conflicts"],
+      "additionalProperties": false,
+      "properties": {
+        "sources": {"type": "object", "additionalProperties": {"type": "string"}},
+        "field_sources": {"type": "object", "description": "dotted path -> slip | quote | master | issued_only | derived | rule", "additionalProperties": {"enum": ["slip", "quote", "master", "issued_only", "derived", "rule"]}},
+        "conflicts": {"type": "array", "items": {"type": "object", "required": ["field", "note"], "properties": {"field": {"type": "string"}, "note": {"type": "string"}}}},
+        "deviations_from_issued": {"type": "array", "items": {"type": "object", "required": ["where", "issued", "used", "kind"], "properties": {"where": {"type": "string"}, "issued": {"type": "string"}, "used": {"type": "string"}, "kind": {"enum": ["typo_corrected", "number_format", "arithmetic", "other"]}}}}
+      }
+    }
+  },
+
+  "$defs": {
+    "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "gstin": {"type": "string", "pattern": "^[0-9]{2}[A-Z0-9]{13}$"},
+    "moneyOrNull": {"type": ["number", "null"], "description": "Rupees. null prints as a dash."},
+    "textGroup": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {"type": "string"},
+        "title": {"type": "string"},
+        "lines": {"type": "array", "items": {"type": "string"}},
+        "sub_groups": {"type": "array", "items": {"type": "object", "required": ["title", "lines"], "additionalProperties": false, "properties": {"title": {"type": "string"}, "lines": {"type": "array", "items": {"type": "string"}}}}},
+        "table_header": {"type": "array", "items": {"type": "string"}},
+        "table": {"type": "array", "items": {"type": "object", "required": ["name", "text"], "additionalProperties": false, "properties": {"name": {"type": "string"}, "text": {"type": "array", "items": {"type": "string"}}}}}
+      }
+    },
+    "block": {
+      "oneOf": [
+        {
+          "type": "object", "required": ["type", "groups", "grand_total"], "additionalProperties": false,
+          "properties": {
+            "type": {"const": "si_groups"},
+            "groups": {"type": "array", "items": {"type": "object", "required": ["label", "address", "rows", "total"], "additionalProperties": false,
+              "properties": {"label": {"type": "string"}, "address": {"type": "string"},
+                "rows": {"type": "array", "items": {"type": "object", "required": ["sr", "desc", "si"], "additionalProperties": false, "properties": {"sr": {"type": "integer"}, "desc": {"type": "string"}, "si": {"type": "number"}}}},
+                "total": {"type": "number"}}}},
+            "grand_total": {"type": "number"},
+            "heading": {"type": ["string", "null"]}
+          }
+        },
+        {
+          "type": "object", "required": ["type", "rows"], "additionalProperties": false,
+          "properties": {
+            "type": {"const": "si_simple"},
+            "heading": {"type": ["string", "null"]},
+            "columns": {"type": "array", "items": {"type": "string"}},
+            "rows": {"type": "array", "items": {"type": "object", "required": ["sr", "desc", "si"], "additionalProperties": false, "properties": {"sr": {"type": "integer"}, "desc": {"type": "string"}, "si": {"type": "number"}}}},
+            "total": {"type": "number"},
+            "total_label": {"type": "string"}
+          }
+        },
+        {
+          "type": "object", "required": ["type", "rows"], "additionalProperties": false,
+          "properties": {
+            "type": {"const": "addons"},
+            "heading": {"type": ["string", "null"]},
+            "columns": {"type": "array", "items": {"type": "string"}},
+            "rows": {"type": "array", "items": {"type": "object", "required": ["sr", "desc", "value"], "additionalProperties": false,
+              "properties": {"sr": {"type": ["integer", "null"]}, "desc": {"type": "string"}, "value": {"type": ["string", "number", "null"], "description": "Number = sum insured; string = limit/remark text."}, "wording_id": {"type": ["string", "null"], "description": "Wording Library id (Phase 2)."}}}}
+          }
+        },
+        {
+          "type": "object", "required": ["type", "columns", "rows"], "additionalProperties": false,
+          "properties": {
+            "type": {"const": "matrix"},
+            "heading": {"type": ["string", "null"]},
+            "columns": {"type": "array", "items": {"type": "object", "required": ["key", "label"], "additionalProperties": false, "properties": {"key": {"type": "string"}, "label": {"type": "string"}}}},
+            "rows": {"type": "array", "items": {"type": "object", "required": ["address", "occupancy", "values"], "additionalProperties": false, "properties": {"address": {"type": "string"}, "occupancy": {"type": "string"}, "values": {"type": "object", "additionalProperties": {"type": ["number", "null"]}}}}},
+            "total": {"type": "object", "additionalProperties": {"type": ["number", "null"]}}
+          }
+        },
+        {
+          "type": "object", "required": ["type", "rows"], "additionalProperties": false,
+          "properties": {
+            "type": {"const": "location_list"},
+            "heading": {"type": ["string", "null"]},
+            "rows": {"type": "array", "items": {"type": "object", "required": ["sr", "address", "occupancy", "si"], "additionalProperties": false,
+              "properties": {"sr": {"type": "integer"}, "address": {"type": "string"}, "occupancy": {"type": ["string", "null"]}, "si": {"type": ["number", "null"]}, "si_note": {"type": ["string", "null"]}, "span": {"type": "integer", "minimum": 1, "description": "Occupancy and SI cells merged over this many rows, starting at this row. Following rows carry null."}}}}
+          }
+        },
+        {
+          "type": "object", "required": ["type", "columns", "rows"], "additionalProperties": false,
+          "properties": {
+            "type": {"const": "kv_rows"},
+            "heading": {"type": ["string", "null"]},
+            "columns": {"type": "array", "items": {"type": "string"}},
+            "rows": {"type": "array", "items": {"type": "array", "items": {"type": ["string", "number", "null"]}}},
+            "total_label": {"type": ["string", "null"]},
+            "total": {"type": ["number", "null"]}
+          }
+        },
+        {
+          "type": "object", "required": ["type", "text"], "additionalProperties": false,
+          "properties": {"type": {"const": "note"}, "text": {"type": "string"}}
+        }
+      ]
+    }
+  }
+}

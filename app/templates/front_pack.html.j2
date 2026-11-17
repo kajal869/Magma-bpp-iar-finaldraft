@@ -1,0 +1,256 @@
+{#- Front pack: RAL, schedule/tax invoice, terms, summary tables, GST block, annexures.
+    Inputs: the case JSON as `d`; helpers money(), dash(), dmy(), period_text(); assets (data URIs) in `img`. -#}
+{%- set pr = d.presentation -%}
+{%- set s = d.system -%}
+{%- set pol = s.policy_no -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ d.insured.name }} - {{ pol }} (front pack)</title>
+<style>{{ css|safe }}</style>
+</head>
+<body class="theme-{{ pr.theme }}">
+
+{#- ================= macros ================= #}
+{%- macro kv(rows) -%}
+<div class="kv">
+{%- for row in rows %}
+  <div class="k">{{ row[0] }}</div><div class="v{{ ' hang' if row[2] else '' }}{{ ' bold' if row|length > 3 and row[3] else '' }}">{{ row[1] }}</div>
+{%- endfor %}
+</div>
+{%- endmacro -%}
+
+{%- macro cell(v) -%}{%- if v is number -%}{{ money(v) }}{%- elif v is none -%}{%- else -%}{{ v }}{%- endif -%}{%- endmacro -%}
+
+{%- macro text_group(g, bar=False) -%}
+<div class="{{ 'sum-bar tbar' if bar else 'grp-title' }}">{{ g.title }}</div>
+{%- if g.lines %}<ul>{% for l in g.lines %}<li{{ ' class="bl"'|safe if bold_line(l) else '' }}>{{ l }}</li>{% endfor %}</ul>{% endif %}
+{%- for sg in g.sub_groups or [] %}<div class="sub-title">{{ sg.title }}</div><ul>{% for l in sg.lines %}<li>{{ l }}</li>{% endfor %}</ul>{% endfor %}
+{%- if g.table %}<table class="ded">{% if g.table_header %}<thead><tr><th>{{ g.table_header[0] }}</th><th>{{ g.table_header[1] }}</th></tr></thead>{% endif %}{% for r in g.table %}<tr><td>{{ r.name }}</td><td>{% for t in r.text %}<div class="excess-line">{{ t }}</div>{% endfor %}</td></tr>{% endfor %}</table>{% endif %}
+{%- endmacro -%}
+
+{%- macro detail_note() -%}
+  <p class="note-bold">For detailed policy coverage/terms &amp; conditions please refer the policy document attached herewith.</p>
+  <p class="note-bold">Important Note:</p>
+  <p>Please examine this Policy including its attached Schedules and annexures if any. In the event of any discrepancy please contact the office of the Company immediately, it being noted that this Policy shall be otherwise considered as being entirely in order.</p>
+{%- endmacro -%}
+
+{#- ================= 1. Risk Assumption Letter ================= #}
+<section class="ral ral-{{ pr.ral_variant }}">
+  <div class="date">Date: {{ dmy(s.issue_date) }}</div>
+  <div class="to">{{ "TO," if pr.ral_variant == "shreeji" else "To," }}<br class="gap">
+    <span class="nm">{{ d.insured.name }}</span><br>
+    {%- for l in (d.insured.address_lines_ral or d.insured.address_lines) %}{{ l }}{{ "<br>"|safe if not loop.last }}{% endfor %}
+  </div>
+  <p>Dear Sir/Madam,</p>
+  <div class="subject">Subject: Risk Assumption Letter</div>
+  <p>Thank you for choosing Magma General Insurance Limited as your preferred General Insurance Company. Please find attached herewith Policy No: <b>{{ pol }}</b> which has been issued based on the information received from you and accordingly, the proposal has been processed.</p>
+  <p>Coverage of risk is subject to realization of the full premium post which, insurance coverage under the policy would commence. In case the premium is not received by us due to cheque {{ "dishonour" if pr.ral_variant == "mann" else "dishonor" }} or any other reason, the insurance cover shall be void ab-initio.</p>
+  {%- if pr.ral_variant == "shreeji" %}
+  <p>If you require any changes in the certificate of insurance cum policy schedule, you are requested to inform us by either writing to us at customercare@magmainsurance.com, or calling our toll free helpline on <b>1800-266-3202</b>. Absence of any communication from you in this regard within a period of 20 days of date of this letter, would mean that the issued policy is in order and as per your proposal.</p>
+  <p>In line with our commitment to environmental sustainability, we have transitioned to e-policies. If you need a<br>printed copy, please call us at 1800 266 3202 or email us at customercare@magmainsurance.com,</p>
+  {%- else %}
+  <p><b>If you require any changes in the certificate of insurance cum policy schedule, you are requested to inform us by either writing to us at <a href="mailto:customercare@magmainsurance.com">customercare@magmainsurance.com</a> or calling our toll free helpline on 1800-266-3202. Absence of any communication from you in this regard within a period of 20 days of date of this letter, would mean that the issued policy is in order and as per your proposal.</b></p>
+  <p>In line with our commitment to environmental sustainability, we have transitioned to e-policies. If you need a printed copy, please call us at 1800 266 3202 or email us at <a href="mailto:customercare@magmainsurance.com">customercare@magmainsurance.com</a></p>
+  {%- endif %}
+  <p>The Risk Assumption Letter is to be read in conjunction with the policy and shall be considered as null and void without the same.</p>
+  <p>Thanking You,</p>
+  <p>Regards</p>
+  <div class="sign">
+    {%- for l in pr.ral_signatory_lines[:-1] %}<div class="co">{{ l }}</div>{% endfor %}
+    {%- if d.options.show_signature %}<img src="{{ img.sig_ral }}" alt="">{% endif %}
+    <div class="co">{{ pr.ral_signatory_lines[-1] }}</div>
+  </div>
+</section>
+
+{#- ================= 2. Schedule / Tax invoice ================= #}
+<section class="page-break">
+  <div class="bar center sched-title">{{ pr.schedule_title }}</div>
+  {%- set gst_row = [pr.gst_label, d.insured.gstin, False] -%}
+  {%- set addr_row = ["Address", d.insured.address_lines|join("
+"), True] -%}
+  {%- set head = [[pr.label_policy_no, pol, False, True], [pr.label_insured, d.insured.name, False]] -%}
+  {%- set mid = ([gst_row, addr_row] if pr.gst_before_address else [addr_row, gst_row]) -%}
+  {%- set office = ["Policy Servicing Office", s.servicing_office.address_lines|join("
+") ~ ", Ph: " ~ s.servicing_office.phone, True] -%}
+  {{ kv(head + mid + [office, ["Period of Insurance", period_text(), False]]) }}
+
+  <div class="bar">Intermediary Details</div>
+  {%- set im = d.intermediary -%}
+  {%- if pr.intermediary_style == "imd_labels" %}
+  {{ kv([["IMD CODE", im.code, False], ["IMD NAME", im.name, False], [pr.label_phone_intermediary, im.mobile, False], ["IMD E mail ID", im.email, False]]) }}
+  {%- elif pr.intermediary_style == "agent_broker_dash" %}
+  {{ kv([["Agent / Broker Name & Code", "- " ~ im.name ~ " / " ~ im.code, False], ["Agent /Broker Mobile no.", "- " ~ im.mobile, False], ["Agent /Broker Email ID", "- " ~ im.email, False]]) }}
+  {%- else %}
+  {{ kv([["Agent / Broker Name & Code", im.name ~ "/" ~ im.code, True], ["Agent /Broker Mobile no.", im.mobile, False], ["Agent /Broker Email ID", im.email, False]]) }}
+  {%- endif %}
+
+  <div class="bar">Policy Details</div>
+  {{ kv([["Risk Location Address (es)", pr.policy_details_text, False], ["Occupancy (ies)", pr.policy_details_text, False], ["Sum Insured", pr.policy_details_text, False]]) }}
+
+  <table class="sec-table">
+    <thead><tr><th>Section</th><th>Coverage</th><th class="r">Sum Insured<br>(in INR )</th><th class="r">Premium<br>(in INR)</th></tr></thead>
+    {%- for sec in d.schedule.sections %}
+    {%- set merge = sec.sub_rows and (sec.sub_rows|selectattr("premium", "none")|list|length == sec.sub_rows|length) %}
+    <tr><td class="sec">Section &ndash; {{ sec.no }}</td><td>{{ sec.label }}</td><td class="r si">{{ dash(sec.sum_insured) }}</td><td class="r pr"{% if merge %} rowspan="{{ sec.sub_rows|length + 1 }}"{% endif %}>{{ dash(sec.premium) }}</td></tr>
+    {%- if sec.sub_rows %}{% for sr in sec.sub_rows %}
+    <tr><td class="sec"></td><td>{{ sr.label }}</td><td class="r si">{{ dash(sr.sum_insured) }}</td>{% if not merge %}<td class="r pr">{{ dash(sr.premium) }}</td>{% endif %}</tr>
+    {%- endfor %}{% endif %}
+    {%- endfor %}
+  </table>
+  <p>Subject to the following additional conditions/warranties, add on covers/clauses to be read with the wordings of the policy hereto</p>
+</section>
+
+{#- ================= 3. Terms ================= #}
+<section class="terms page-break">
+  {%- for g in d.terms.section_conditions %}{{ text_group(g) }}{% endfor %}
+  {{ text_group(d.terms.all_sections_conditions, True) }}
+  <div class="sum-bar tbar">DEDUCTIBLE/ EXCESS</div>
+  {%- for g in d.terms.deductibles %}{{ text_group(g) }}{% endfor %}
+</section>
+
+{#- ================= 4. Premium, co-insurance, hypothecation ================= #}
+<section class="summary">
+  {%- set dec = pr.premium_summary_decimals -%}
+  <div class="sum-bar">PREMIUM SUMMARY</div>
+  <table class="grid prem">
+    <thead><tr><th>Description</th><th class="r">Amount (in INR)</th></tr></thead>
+    <tr><td>Basic Premium</td><td class="r">{{ money(d.premium.basic, dec) }}</td></tr>
+    <tr><td>Add: Terrorism Premium</td><td class="r">{{ money(d.premium.terrorism, dec) if d.premium.terrorism else ("00.00" if pr.theme == "laghu" else "-") }}</td></tr>
+    <tr><td>Net Premium</td><td class="r">{{ money(d.premium.net, dec) }}</td></tr>
+    {%- for t in d.premium.taxes %}
+    <tr><td>{{ t.type }} @{{ (t.rate * 100)|round|int }}%</td><td class="r">{{ money(t.amount, dec) }}</td></tr>
+    {%- endfor %}
+    <tr><td>Final Premium</td><td class="r">{{ money(d.premium.final, dec) }}</td></tr>
+  </table>
+  <div class="sum-bar">CO-INSURANCE DETAILS</div>
+  <table class="grid coin">
+    <thead><tr><th class="c" style="width:14%">Sl. No.</th><th class="c">{{ "Insurer" if pr.theme == "laghu" else "Name of the Insurer" }}</th><th class="c" style="width:18%">Share (%)</th></tr></thead>
+    {%- for c in d.coinsurance %}<tr><td>{{ loop.index }}</td><td{{ ' class="c"'|safe if pr.theme == "laghu" else "" }}>{{ c.insurer }}</td><td{{ ' class="c"'|safe if pr.theme == "laghu" else "" }}>{{ c.share_pct|int }}</td></tr>{% endfor %}
+  </table>
+  <div class="sum-bar">HYPOTHECATION DETAILS</div>
+  <table class="grid hyp">
+    <thead><tr><th style="width:14%">Sl. No.</th><th>Name of the Financier</th></tr></thead>
+    {%- for h in d.hypothecation %}<tr><td>{{ loop.index }}</td><td class="nm">{{ h }}</td></tr>{% endfor %}
+  </table>
+</section>
+
+{#- ================= 5. GST / invoice block ================= #}
+{%- if pr.note_position == "before_gst" %}<section class="summary">{{ detail_note() }}</section>{% endif %}
+<section class="gst{{ ' newpage' if pr.gst_new_page else '' }}">
+  <div class="lines" style="margin-top:14pt">
+    <p>{{ pr.gst_magma_label }}{{ s.magma_gstin }}</p>
+    <p>GST Invoice Number - {{ s.gst_invoice_no }}</p>
+    <p>GST Invoice Date {{ "–" if pr.theme == "valmet" else "-" }} {{ dmy(s.gst_invoice_date) }}</p>
+    {%- if s.previous_gst_invoice_no %}<p>Previous GST Invoice No. -{{ s.previous_gst_invoice_no }}</p>{% endif %}
+    <p>Accounting Code for Service - {{ s.sac_code }}, {{ s.sac_description }}</p>
+  </div>
+  <p style="margin-top:12pt">Place of Supply:{{ s.place_of_supply.state }} ( {{ s.place_of_supply.code }} )</p>
+  <p>Whether Tax is payable on Reverse Charge - {{ "Yes" if s.reverse_charge else "No" }}</p>
+  {%- if pr.tax_invoice_note_uin %}<p>UIN : {{ d.product.uin }}</p>{% endif %}
+  <p class="legal">This is a valid Tax invoice in terms of Sub-rule 2 of Rule 54 of CGST Rule 2017. Further, being an Insurance Company, issuing of e-invoice and QR Code are not applicable on us in terms of Notification No 13 and 14 of 2020 dated 21st March 2020 issued from Central Board of Indirect Taxes and Customs. I/We hereby declare that though our aggregate turnover in any preceding financial year from 2017-18 onwards is more than the aggregate turnover notified under sub-rule (4) of rule 48, we are not required to prepare an invoice in terms of the provisions of the said sub-rule.</p>
+  {%- if pr.stamp_duty_style == "period" %}
+  <p>Consolidated Stamp Duty paid towards Insurance Policy Stamps vide Order No.{{ s.stamp_duty.order_no }} Dated {{ dmy(s.stamp_duty.order_date) }}.</p>
+  {%- else %}
+  <p>Consolidated Stamp Duty paid towards Insurance Policy Stamps vide Order No. {{ s.stamp_duty.order_no }}, Dated {{ dmy(s.stamp_duty.order_date) }}</p>
+  {%- endif %}
+  <p class="witness">IN WITNESS WHEREOF THIS Policy has been signed at {{ s.signed_at }} on <b>{{ dmy(s.signed_on) }}</b></p>
+  <div class="sigblock avoid"><div class="box">
+    {%- for l in pr.gst_signatory_lines[:-1] %}<div class="co">{{ l }}</div>{% endfor %}
+    {%- if d.options.show_signature %}<img src="{{ img.sig_gst }}" alt="">{% endif %}
+    <div class="co">{{ pr.gst_signatory_lines[-1] }}</div>
+  </div></div>
+  <div class="place">Place-{{ s.signed_at }}<br>Date-{{ dmy(s.signed_on) }}</div>
+  {%- if pr.note_position == "after_sign" %}{{ detail_note() }}{% endif %}
+</section>
+
+{#- ================= 6. Annexures ================= #}
+{%- for a in d.annexures %}
+{%- set landscape = a.title == "Risk Location Annexure" and false %}
+<section class="annex{{ ' gray' if a.no in (pr.gray_table_annexures or []) else '' }}{{ ' plainlbl' if a.no in (pr.plain_label_annexures or []) else '' }}">
+  {%- if loop.first and pr.note_position == "with_annexure" %}{{ detail_note() }}{% endif %}
+  {%- if a.title != "Risk Location Annexure" %}
+  <h3>{{ a.title }}</h3>
+  <h3 class="sub">Attached to and forming part of Policy Number: {{ pol }}</h3>
+  {%- set h = a.header %}
+  {%- set rl_label = "Risk Location Address 1" if (pr.theme == "valmet" and a.no == 1) else ("Risk Location Address" if pr.theme == "valmet" else "Risk Location") %}
+  {%- set ba_row = ["Business Activity", h.business_activity or "", False] %}
+  {%- set oc_row = ["Occupancy", h.occupancy or "", False] %}
+  {%- set tail = [oc_row, ba_row] if pr.annex_occupancy_first else [ba_row, oc_row] %}
+  {{ kv([["Insured", h.insured, False], [rl_label, h.risk_location, True]] + tail) }}
+  {%- endif %}
+  {%- for b in a.blocks %}
+  {%- if b.type == "si_groups" %}
+  {%- if b.heading %}<div class="heading" style="text-decoration:none">{{ b.heading }}</div>{% endif %}
+  <table class="at groups">
+    <thead><tr><th class="srn">Sr. no.</th><th>Description</th><th class="r" style="width:19%">Total Sum Insured (in INR)</th></tr></thead>
+    {%- for g in b.groups %}
+    <tr class="grp"><td>{{ g.label }}</td><td colspan="2">{{ g.address }}</td></tr>
+    {%- for r in g.rows %}<tr><td class="srn">{{ r.sr }}</td><td>{{ r.desc }}</td><td class="r">{{ money(r.si) }}</td></tr>{% endfor %}
+    <tr class="tot"><td colspan="2">Total</td><td class="r">{{ money(g.total) }}</td></tr>
+    {%- endfor %}
+    <tr class="grand"><td colspan="2">Total Sum Insured</td><td class="r">{{ money(b.grand_total) }}</td></tr>
+  </table>
+  {%- elif b.type == "si_simple" %}
+  {%- if b.heading %}<div class="heading">{{ b.heading }}</div>{% endif %}
+  <table class="at">
+    <thead><tr>{% for c in (b.columns or ["Sr. no.", "Description", "Sum Insured (in INR)"]) %}<th class="{{ 'srn' if loop.first else ('r' if loop.last else '') }}"{{ ' style="width:22%"'|safe if loop.last else "" }}>{{ c }}</th>{% endfor %}</tr></thead>
+    {%- for r in b.rows %}<tr><td class="srn">{{ r.sr }}</td><td>{{ r.desc }}</td><td class="r">{{ money(r.si) }}</td></tr>{% endfor %}
+    {%- if b.total is defined and b.total_label %}<tr class="tot"><td colspan="2">{{ b.total_label }}</td><td class="r">{{ money(b.total) }}</td></tr>{% endif %}
+  </table>
+  {%- elif b.type == "addons" %}
+  <div class="ab{{ ' big' if (b.rows|length > 10 and pr.theme == 'mann') else '' }}">
+  {%- if b.heading %}<div class="heading">{{ b.heading }}</div>{% endif %}
+  <table class="at addons{{ ' keep' if b.rows|length <= 10 else '' }}">
+    <thead><tr>{% for c in (b.columns or []) %}<th{{ ' class="srn"'|safe if loop.first and b.rows[0].sr is not none else "" }}>{{ c }}</th>{% endfor %}</tr></thead>
+    {%- for r in b.rows %}<tr>{% if r.sr is not none %}<td class="srn">{{ r.sr }}</td>{% endif %}<td>{{ r.desc }}</td><td>{{ cell(r.value) }}</td></tr>{% endfor %}
+  </table>
+  </div>
+  {%- elif b.type == "matrix" %}
+  <div{{ ' class="landwrap"'|safe if b.columns|length >= 5 else "" }}>
+  {%- if b.heading %}<div class="heading">{{ b.heading }}</div>{% endif %}
+  <table class="at matrix">
+    <thead><tr>{% if b.columns|length > 1 %}<th>Risk Location address</th><th>Occupancy</th>{% else %}<th style="text-align:left">Risk Location address</th><th>Occupancy</th>{% endif %}{% for c in b.columns %}<th class="r">{{ c.label }}</th>{% endfor %}</tr></thead>
+    {%- for r in b.rows %}<tr><td class="addr">{{ r.address }}</td><td class="occ">{{ r.occupancy }}</td>{% for c in b.columns %}<td class="r">{{ dash_blank(r["values"][c.key]) }}</td>{% endfor %}</tr>{% endfor %}
+    {%- if b.total %}<tr class="tot"><td colspan="2">Total</td>{% for c in b.columns %}<td class="r">{{ dash_blank(b.total[c.key]) }}</td>{% endfor %}</tr>{% endif %}
+  </table>
+  </div>
+  {%- elif b.type == "location_list" %}
+  <div class="heading">{{ b.heading }}</div>
+  <table class="at loc">
+    <thead><tr><th class="c" style="width:8%">S.No.</th><th class="c">Locations Address</th><th class="c" style="width:24%">Occupancy</th><th class="c" style="width:18%">Sum Insured (In INR)</th></tr></thead>
+    {%- set skip = namespace(n=0) %}
+    {%- for r in b.rows %}
+    <tr><td style="text-align:center;vertical-align:bottom">{{ r.sr }}</td><td style="text-align:left">{{ r.address }}</td>
+      {%- if r.span and r.span > 1 %}<td rowspan="{{ r.span }}" class="c">{{ r.occupancy }}</td><td rowspan="{{ r.span }}" class="c">{{ money(r.si) }}{% if r.si_note %}<br>{{ r.si_note }}{% endif %}</td>
+      {%- elif r.occupancy is not none or r.si is not none %}<td class="c">{{ r.occupancy }}</td><td class="c">{{ money(r.si) if r.si is not none else "" }}</td>{% endif %}</tr>
+    {%- endfor %}
+  </table>
+  {%- if pr.location_caption %}<div class="loc-caption">{{ pr.location_caption }}</div>{% endif %}
+  {%- elif b.type == "kv_rows" %}
+  {%- if b.heading %}<div class="heading">{{ b.heading }}</div>{% endif %}
+  <table class="at">
+    <thead><tr>{% for c in b.columns %}<th{{ ' class="r"'|safe if loop.last and b.rows and b.rows[0][-1] is number else "" }}>{{ c }}</th>{% endfor %}</tr></thead>
+    {%- for row in b.rows %}<tr>{% for v in row %}<td{{ ' class="r"'|safe if v is number else "" }}>{{ cell(v) }}</td>{% endfor %}</tr>{% endfor %}
+    {%- if b.total_label %}<tr class="tot"><td colspan="{{ b.columns|length - 1 }}">{{ b.total_label }}</td><td class="r">{{ money(b.total) }}</td></tr>{% endif %}
+  </table>
+  {%- elif b.type == "note" %}
+  <p class="note">{{ b.text }}</p>
+  {%- endif %}
+  {%- endfor %}
+</section>
+{%- endfor %}
+{%- for blk in wording %}
+<section class="wording wb-{{ blk.name }}{{ ' np' if blk.new_page else '' }}">
+{%- for p in blk.paragraphs %}
+{%- if p.type == "table" %}
+<table class="wt">{% for r in p.rows %}<tr>{% for c in r %}<td>{{ c }}</td>{% endfor %}</tr>{% endfor %}</table>
+{%- else %}
+<p class="w{{ ' wh' if p.heading else '' }}" style="margin-left:{{ p.indent }}pt;font-size:{{ p.fs }}pt">{{ p.text }}</p>
+{%- endif %}
+{%- endfor %}
+</section>
+{%- endfor %}
+</body>
+</html>
