@@ -51,6 +51,12 @@ def template_for(layout: str | None) -> tuple[dict | None, str]:
     return json.loads(p.read_text(encoding="utf-8")), name
 
 
+def signature_available(theme: str) -> bool:
+    """The signatory images are private (not in the repo). Drafts print the signature only when the files are present."""
+    names = ["sig_laghu.png"] if theme == "laghu" else ["sig_ral.png", "sig_gst.png"]
+    return all((ROOT / "app" / "assets" / n).exists() for n in names)
+
+
 def _lines(v) -> list[str]:
     if isinstance(v, list):
         return v
@@ -88,14 +94,20 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
 
     net, final = val("premium.net", None), val("premium.final", None)
     gst = round((final - net), 2) if net is not None and final is not None else 0.0
-    case["premium"] = {"basic": net if net is not None else 0, "terrorism": 0, "net": net if net is not None else 0,
+    terr = val("premium.terrorism", None)
+    terr = float(terr) if isinstance(terr, (int, float)) else 0
+    case["premium"] = {"basic": (net - terr) if net is not None else 0, "terrorism": terr, "net": net if net is not None else 0,
                        "taxes": [{"type": "IGST", "rate": 0.18, "amount": gst}], "final": final if final is not None else 0}
-    notes.append("tax split (IGST vs CGST+SGST) and the terrorism part of the premium are not decided by the files; placeholders IGST 18% / terrorism 0")
+    notes.append("tax split (IGST vs CGST+SGST) is not decided by the files; placeholder IGST 18%" + ("" if "premium.terrorism" in f else "; the terrorism part of the premium was not found (0)"))
     share = slip.get("our_share")
     case["coinsurance"] = ([{"insurer": c["name"], "share_pct": c["share"] * 100 if c["share"] <= 1 else c["share"]} for c in (slip.get("co_insurers") or [])]
                            or ([{"insurer": "Magma General Insurance Limited", "share_pct": share * 100 if share and share <= 1 else (share or 100)}]))
     fin = hdr.get("financial interest")
-    case["hypothecation"] = [fin] if fin else []
+    hy = f["hypothecation"].value if "hypothecation" in f and f["hypothecation"].value else None
+    case["hypothecation"] = list(hy) if isinstance(hy, list) else ([hy] if hy else ([fin] if fin else []))
+    ba = (sec.get("scalars") or {}).get("business_activity", {}).get("value")
+    if ba and not case["insured"]["business_activity"]:
+        case["insured"]["business_activity"] = str(ba)
 
     rows = []
     for n in range(1, 14):
@@ -109,6 +121,9 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     annex, unbuilt = annexures_for(res, sec, case)
     case["annexures"] = annex
     notes += [f"not built: {u}" for u in unbuilt]
+    case["options"]["show_signature"] = signature_available(case["presentation"]["theme"])
+    if not case["options"]["show_signature"]:
+        notes.append("signature images (app/assets/sig_*.png) are not installed; the draft prints no signature")
     case["options"]["wording_sections"] = [n for n in range(1, 14) if sec["sections"][n]["sum_insured"] or sec["sections"][n]["premium"]]
     tool = {"slip": "slip", "quote": "quote", "imd": "master"}
     case["provenance"] = {

@@ -150,6 +150,10 @@ def build_fields(case: dict, env: dict, suggest: dict | None = None, values: dic
             source = "Product rule (template)"
         elif system_only or not value.strip():
             status, source = "missing", ("Not in the uploaded files" if system_only else "Not found")
+            if key == "system.policy_no":
+                exp = env.get("policy.expiring_no")
+                note = (f"This is a renewal of {exp.value}. The new policy number is issued by the policy system and is not in the files." if exp and exp.value
+                        else "The new policy number is issued by the policy system and is not in the files.")
         if status != "missing" and not value.strip():
             status, source = "missing", "Not found in the files"
         out.append({"key": key, "label": label, "group": group, "kind": kind, "value": value, "status": status, "source": source, "note": note,

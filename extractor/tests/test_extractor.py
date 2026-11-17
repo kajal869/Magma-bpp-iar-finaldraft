@@ -17,9 +17,14 @@ def test_resolver_agreement_is_ok():
     assert r["premium.final"].status == "ok" and r["premium.final"].value == 100.4   # quote wins for money
 
 
-def test_resolver_disagreement_is_conflict_never_picked():
+def test_identity_disagreement_prefers_the_slip_but_is_flagged():
     r = resolve([F("insured.gstin", "29AAAAA0000A1Z5", "slip"), F("insured.gstin", "27BBBBB1111B1Z5", "quote")])[0]
-    assert r.status == "conflict" and r.value is None and len(r.alternatives) == 2
+    assert r.value == "29AAAAA0000A1Z5" and r.status == "check" and len(r.alternatives) == 2 and "closing slip value is used" in r.note
+
+
+def test_money_disagreement_is_still_a_conflict_never_picked():
+    r = resolve([F("premium.net", 100.0, "slip"), F("premium.net", 5000.0, "quote")])[0]
+    assert r.status == "conflict" and r.value is None
 
 
 def test_resolver_never_upgrades_single_source():
@@ -92,3 +97,26 @@ def test_quote_net_that_does_not_tie_does_not_confirm(tmp_path):
     fields, _ = headline.read(str(q), slip_total=20000.0)           # slip amount equals the NET: it excludes GST
     r = {f.field: f for f in resolve(fields + [F("premium.final", 20000.0, "slip")])}
     assert r["premium.final"].status in ("check", "conflict") and r["premium.final"].status not in ("ok", "derived")
+
+
+
+
+def test_policy_period_must_be_twelve_months_or_it_is_a_check(tmp_path):
+    import datetime
+    import sys
+    sys.path.insert(0, "samples")
+    from extractor.adapters import slip as slip_adapter
+    from samples.make_samples import make_slip
+    for end, expect in ((datetime.datetime(2027, 3, 31), "ok"), (datetime.datetime(2026, 9, 30), "check")):
+        p = tmp_path / f"s_{end.year}{end.month}.xlsx"
+        make_slip(p, start=datetime.datetime(2026, 4, 1))
+        import openpyxl
+        wb = openpyxl.load_workbook(p)
+        ws = wb["Closing Slip"]
+        for row in ws.iter_rows():
+            for c in row:
+                if isinstance(c.value, str) and c.value.lower().startswith("policy end date"):
+                    ws.cell(row=c.row, column=c.column + 1, value=end)
+        wb.save(p)
+        f = {x.field: x for x in slip_adapter.read(str(p))[0]}
+        assert f["period.start"].status == expect and f["period.end"].status == expect

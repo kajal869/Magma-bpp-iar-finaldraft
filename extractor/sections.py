@@ -151,23 +151,30 @@ LAGHU_GROUP = [(r"bharat laghu|laghu udyam suraksha|fire", 1), (r"burglary", 3),
 
 
 def laghu_terms(sh) -> dict:
-    """Deductible / Conditions blocks: a heading row names a section, rows under it are lines."""
-    mode, sec, sub = None, None, None
-    ded, cond, allc, subg, tail = {}, {}, [], {}, []
+    """Deductible / Conditions blocks. Two heading orders occur: a mode heading first and cover headings under it (Laghu), or an explicit
+    "Section - N ..." heading first with Excess / Conditions sub-headings under it (SFSP-style quotes)."""
+    mode, sec, sub, explicit = None, None, None, False
+    ded, cond, allc, subg = {}, {}, [], {}
     for _, cells in sh.rows:
         texts = [_txt(v) for c, v in cells if isinstance(v, str) and _txt(v)]
         if not texts or len(texts) > 2 and any(is_num(v) for _, v in cells):
             continue
         t = texts[-1] if len(texts) == 1 else " ".join(texts)
         low = norm(t)
-        if re.match(r"^deductible", low):
-            mode, sec, sub = "ded", None, None
+        mnum = re.match(r"^section\s*[\u2013\u2014\-:.]*\s*(\d{1,2})\b", low)
+        if mnum and len(t) < 80 and not any(is_num(v) for _, v in cells):
+            sec, sub, explicit, mode = int(mnum.group(1)), None, True, None
             continue
-        if re.match(r"^conditions, warranties", low):
-            mode, sec, sub = "cond", None, None
+        if re.match(r"^(?:excess\s*/\s*)?deductibles?\b|^excess\s*:?$", low):
+            mode, sub = "ded", None
+            sec = sec if explicit else None
+            continue
+        if re.match(r"^conditions\s*[,/]\s*warranties|^coverages\s*/\s*clauses", low):
+            mode, sub = "cond", None
+            sec = sec if explicit else None
             continue
         if re.match(r"^conditions applicable to all", low):
-            mode, sec, sub = "all", None, None
+            mode, sec, sub, explicit = "all", None, None, False
             continue
         if re.match(r"^terms, conditions, and capacity|^quotation valid|^quote date|^our (terms|quote)", low):
             if mode == "all":
@@ -182,7 +189,7 @@ def laghu_terms(sh) -> dict:
             allc.append(t)
             continue
         grp = next((n for rx, n in LAGHU_GROUP if re.search(rx, low) and len(t) < 60), None)
-        if grp and len(t.split()) <= 6:
+        if not explicit and grp and len(t.split()) <= 6:
             sec, sub = grp, None
             continue
         if sec is None:
@@ -200,40 +207,125 @@ def laghu_terms(sh) -> dict:
 
 
 # ------------------------------------------------------------------ dispatch
-def read(path: str, variant: str | None = None, net: float | None = None) -> dict:
-    """-> {layout, sections{1..13}, net, terms, locations, items, warnings}. `net` = the resolved net premium, used for the tie-out when the sheet has none."""
+def _legacy(path, variant, out) -> bool:
+    """The pilot readers (blocks / matrix / asset). True if they produced at least one section; never raises."""
+    try:
+        q = quote2.parse(path, variant)
+    except Exception as e:
+        out["warnings"].append(f"built-in reader could not read this layout ({type(e).__name__}: {e})")
+        return False
+    got = False
+    for no, s in q["sections"].items():
+        row = out["sections"][int(no)]
+        row["sum_insured"], row["premium"] = s.get("total_si"), s.get("premium")
+        row["items"] = s.get("items", [])
+        if s.get("inferred"):
+            row["note"] = s["inferred"]
+        got = got or bool(row["sum_insured"] or row["premium"])
+    if not got:
+        return False
+    out["layout"] = q["layout"]
+    t = q.get("terms", {})
+    out["terms"] = {"conditions": {int(k): v for k, v in (t.get("conditions") or {}).items()},
+                    "deductibles": {int(k): v for k, v in (t.get("deductibles") or {}).items()},
+                    "all": t.get("all") or [], "sub_groups": {}}
+    out["locations"] = q.get("locations", [])
+    out["header"] = {k: q.get(k) for k in ("insured_name", "address", "risk_location", "occupancy", "business_description", "policy_start", "policy_end")}
+    out["layout_info"] = {"source": "builtin", "profile": None, "reader": q["layout"]}
+    return True
+
+
+def _fill_generic(out: dict, got: dict) -> None:
+    """Copy a profile / discovered read into the common section structure."""
+    out["layout"] = got["reader"]
+    out["net"] = got.get("net_used")
+    for n, d in got["sections"].items():
+        row = out["sections"][n]
+        row["sum_insured"], row["premium"] = d["si"], d["premium"]
+        row["refs"] = d.get("refs", [])
+        if d.get("extra_lines"):
+            row["note"] = f"includes {d['extra_lines']} extra premium line(s) under the section (e.g. terrorism)"
+        if got["reader"] == "location_matrix":
+            row["note"] = "single-section quote: the whole premium is assigned to Section 1"
+    out["gross"] = got.get("gross")
+    out["layout_info"] = got["layout_info"] | {"reader": got["reader"], "verified": got["verified"], "net_cell": got.get("net_ref")}
+    try:
+        out["terms"] = laghu_terms(got["sheet"])            # the same heading-driven term reader, headings found by section name
+    except Exception:
+        pass
+    if not got["verified"]:
+        out["warnings"].append("sections were read by a generic recipe but the section premiums do not add up to the net premium; shown as check")
+
+
+def read(path: str, variant: str | None = None, net: float | None = None, slip: dict | None = None) -> dict:
+    """-> {layout, sections{1..13}, net, terms, locations, items, scalars, taught, layout_info, warnings}.
+    `net` = the resolved net premium (tie-out when the sheet has none); `slip` = the parsed closing slip (second source for section 1/2 sum insured)."""
+    from .layouts import engine
     out = {"layout": None, "sections": _empty_sections(), "net": None, "terms": {"conditions": {}, "deductibles": {}, "all": [], "sub_groups": {}},
-           "locations": [], "items": [], "warnings": []}
+           "locations": [], "items": [], "warnings": [], "scalars": {}, "taught": {}, "layout_info": {"source": "none", "profile": None}}
     sheets = load(path)
     lag = detect_laghu(sheets)
-    try:
-        if lag is not None:
-            r = parse_laghu(lag)
-            out.update(layout="laghu", net=r["net"], items=r["items"], sections=r["sections"], terms=laghu_terms(lag), header=r["header"])
-            out["locations"] = []
-        else:
-            q = quote2.parse(path, variant)
-            out["layout"] = q["layout"]
-            for no, s in q["sections"].items():
-                row = out["sections"][int(no)]
-                row["sum_insured"], row["premium"] = s.get("total_si"), s.get("premium")
-                row["items"] = s.get("items", [])
-                if s.get("inferred"):
-                    row["note"] = s["inferred"]
-            t = q.get("terms", {})
-            out["terms"] = {"conditions": {int(k): v for k, v in (t.get("conditions") or {}).items()},
-                            "deductibles": {int(k): v for k, v in (t.get("deductibles") or {}).items()},
-                            "all": t.get("all") or [], "sub_groups": {}}
-            out["locations"] = q.get("locations", [])
-            out["header"] = {k: q.get(k) for k in ("insured_name", "address", "risk_location", "occupancy", "business_description", "policy_start", "policy_end")}
-    except Exception as e:
-        out["warnings"].append(f"sections could not be read ({type(e).__name__}: {e}); layout not supported yet")
-        return out
+    if lag is not None:
+        r = parse_laghu(lag)
+        out.update(layout="laghu", net=r["net"], items=r["items"], sections=r["sections"], terms=laghu_terms(lag), header=r["header"],
+                   layout_info={"source": "builtin", "profile": None, "reader": "laghu"})
+    else:
+        got = engine.apply_profiles(sheets, net)
+        if got:
+            _fill_generic(out, got)
+        elif not _legacy(path, variant, out):
+            got = engine.discover(sheets, net)
+            if got:
+                _fill_generic(out, got)
+            else:
+                out["layout_info"] = {"source": "unsupported", "profile": None, "teach": True}
+                out["warnings"].append("layout not recognised: no built-in reader, stored profile or generic recipe fits this quote. "
+                                       "Point at the cells once (POST /api/layouts/teach) and the same format will be read next time.")
     if out["net"] is None:
         out["net"] = net
+    out["scalars"] = engine.scalars(sheets)
+    _apply_taught(out, engine.taught_overrides(sheets))
+    _from_slip(out, slip or {})
     _drop_unopted_terms(out)
     out["warnings"] += _status(out)
     return out
+
+
+def _apply_taught(out: dict, taught: dict) -> None:
+    """Cells a person pointed at win for their field and say so."""
+    if taught and out["layout_info"].get("source") == "unsupported":
+        pid = next(iter(taught.values()))["profile"]
+        out["layout"], out["layout_info"] = "taught", {"source": "taught", "profile": pid, "reader": "taught cells"}
+        out["warnings"] = [w for w in out["warnings"] if not w.startswith("layout not recognised")]
+    for target, t in taught.items():
+        m = re.fullmatch(r"section\.(\d+)\.(si|premium)", target)
+        if m and is_num(t["value"]):
+            row = out["sections"][int(m.group(1))]
+            row["sum_insured" if m.group(2) == "si" else "premium"] = float(t["value"])
+            row["note"] = (row["note"] + "; " if row["note"] else "") + f"taught location {t['sheet']}!{t['ref']}"
+            row["taught"] = True
+        else:
+            out["taught"][target] = t
+
+
+def _from_slip(out: dict, slip: dict) -> None:
+    """The closing slip's RI allocation states the fire (and FLOP) sum insured: a second source, and a fallback when the quote is unreadable."""
+    for sec, key, name in ((1, "pd_allocation", "Property Damage (Fire Section)"), (2, "bi_allocation", "Business Interruption (FLOP Section)")):
+        v = slip.get(key)
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            continue
+        if v < 1000:                                   # a share (0..1) or blank, not a sum insured
+            continue
+        row = out["sections"][sec]
+        if row["sum_insured"] in (None, 0):
+            row["sum_insured"], row["status"] = v, "check"
+            row["note"] = f"sum insured from the closing slip ({name}); the quote's section table could not be read"
+            row["from_slip"] = True
+        elif abs(row["sum_insured"] - v) > 1.5:
+            row["slip_sum_insured"] = v
+            row["note"] = (row["note"] + "; " if row["note"] else "") + f"closing slip says {v:,.0f} for this section"
 
 
 def _drop_unopted_terms(out: dict) -> None:
@@ -261,6 +353,11 @@ def _status(out: dict) -> list[str]:
     tied = out["net"] is not None and abs(total - out["net"]) <= TIE
     out["premium_sum"], out["tie"] = total, tied
     for s in have:
+        if s.get("from_slip"):
+            continue                                       # already `check`, with its own note
+        if s.get("slip_sum_insured"):
+            s["status"] = "check"
+            continue
         if empty_prem and s["no"] not in empty_prem and s["premium"]:
             s["status"], s["note"] = "check", (s["note"] + "; " if s["note"] else "") + f"section(s) {empty_prem} have a sum insured but no premium; premium split may be misallocated"
         elif empty_prem and s["no"] in empty_prem:

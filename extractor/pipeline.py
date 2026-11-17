@@ -29,9 +29,49 @@ def run(slip_path: str, quote_path: str, imd_path: str | None = None) -> dict:
     resolved = resolve(fields)
     net = next((f.value for f in resolved if f.field == "premium.net" and isinstance(f.value, (int, float))), None)
     try:
-        sec = sections_mod.read(quote_path, info.get("variant"), net)
+        sec = sections_mod.read(quote_path, info.get("variant"), net, raw)
         warnings += sec["warnings"]
     except Exception as e:
         sec = None
         warnings.append(f"sections could not be read: {type(e).__name__}: {e}")
+    resolved = _extras(_from_sections(resolved, sec, slip_total), sec)
     return {"fields": resolved, "addons": rows, "sections": sec, "slip": raw, "warnings": warnings, "variant": info.get("variant")}
+
+
+def _extras(fields: list, sec: dict | None) -> list:
+    """Single-source values read by label (terrorism premium, hypothecation) or taught by a person; they bypass the resolver."""
+    from .envelope import Field
+    if not sec:
+        return fields
+    out = list(fields)
+    for name, sc in (sec.get("scalars") or {}).items():
+        if name in ("premium.terrorism", "hypothecation") and not any(f.field == name for f in out):
+            out.append(Field(name, sc["value"], "ok", {"tool": "quote", "sheet": sc["sheet"], "cell": sc["ref"], "method": "label"}))
+    for target, t in (sec.get("taught") or {}).items():
+        if target in ("premium.net", "premium.final", "premium.terrorism", "hypothecation", "business_activity"):
+            out = [f for f in out if f.field != target]
+            out.append(Field(target, t["value"], "derived", {"tool": "quote", "sheet": t["sheet"], "cell": t["ref"], "method": "taught"}, note="from a location you taught (profile " + t["profile"] + ")"))
+    return out
+
+
+def _from_sections(fields: list, sec: dict | None, slip_total: float | None) -> list:
+    """When the headline reader could not settle a premium but a verified section table states it, use the table.
+    Verified = the section premiums add up to the table's own net premium."""
+    from .envelope import SHOWN, Field
+    info = (sec or {}).get("layout_info") or {}
+    if not sec or not info.get("verified") or sec.get("net") is None:
+        return fields
+    out = list(fields)
+    get = lambda n: next((f for f in out if f.field == n), None)  # noqa: E731
+    src = {"tool": "quote", "sheet": "", "cell": info.get("net_cell") or "", "method": "section table"}
+    net = get("premium.net")
+    if net is None or net.status not in SHOWN:
+        out = [f for f in out if f.field != "premium.net"]
+        out.append(Field("premium.net", sec["net"], "derived", src, note="net premium stated on the verified section table (section premiums add up to it)"))
+    gross = sec.get("gross")
+    fin = get("premium.final")
+    if gross and abs(gross - sec["net"] * 1.18) <= 2 and fin is not None and fin.status not in SHOWN and slip_total is not None and abs(slip_total - sec["net"]) <= 1:
+        out = [f for f in out if f.field != "premium.final"]
+        out.append(Field("premium.final", gross, "derived", {**src, "method": "section table"},
+                         note="the closing slip amount equals the quote's net premium (it excludes GST); total taken from the quote's premium incl. GST"))
+    return out
