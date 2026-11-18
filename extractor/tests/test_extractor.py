@@ -147,3 +147,16 @@ def test_quote_naming_another_insured_is_flagged_not_overwritten(tmp_path):
     assert got.value == "TOWELL ENGINEERING LLP" and got.status == "check" and got.alternatives[1]["value"] == "Kasliwal Automotive Pvt Ltd"
     ok_fields, ok_warns, _ = quote_identity.cross_check(str(p), "Kasliwal Automotive Private Limited", "Halka 17 Indore")
     assert ok_fields == [] and not any("different insured" in w for w in ok_warns)
+
+
+def test_slip_amount_equal_to_net_selects_the_sheet_and_is_derived():
+    from extractor.adapters import headline
+    from extractor.envelope import Field
+    rep = {"fields": {"net_premium": {"value": None, "evidence": [{"value": 420650.0}, {"value": 89346.55}]},
+                      "total_premium": {"value": None, "evidence": [{"value": 496367.0}, {"value": 105428.93}]}}}
+    fields = [Field("premium.net", None, "conflict"), Field("premium.final", None, "conflict")]
+    out = {f.field: f for f in headline._apply_net_tie(fields, rep, 420650.0)}
+    assert out["premium.net"].value == 420650.0 and out["premium.net"].status == "derived" and "exclude GST" in out["premium.net"].note
+    assert out["premium.final"].value == 496367.0 and out["premium.final"].status == "derived"
+    amb = {f.field: f for f in headline._apply_net_tie([Field("premium.net", None, "conflict")], {"fields": {"net_premium": {"evidence": [{"value": 100.0}, {"value": 100.5}]}}}, 100.0)}
+    assert amb["premium.net"].status == "conflict"            # two candidates within tolerance of the slip amount: nothing is picked

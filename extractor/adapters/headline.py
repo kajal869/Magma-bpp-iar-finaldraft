@@ -95,20 +95,35 @@ def _ties(rep: dict, slip_total: float) -> list[float]:
 
 
 def _apply_net_tie(fields: list[Field], rep: dict, slip_total: float | None) -> list[Field]:
-    """A net premium left in conflict (several scenarios) is resolved only if exactly one candidate ties to the slip total."""
+    """A premium left in conflict (several scenarios / sheets) is resolved only if exactly one candidate ties to the slip total.
+    Tie 1: net x 1.18 equals the slip total (the slip states the premium incl. GST).
+    Tie 2: net equals the slip total (some slips state the net premium under a 'including GST' heading); the total is then the one candidate equal to net x 1.18.
+    Both are recorded in the note, and the value is `derived`, never `ok`."""
     if slip_total is None:
         return fields
-    for f in fields:
-        if f.field == "premium.final" and f.status == "conflict":
-            hit = sorted({round(t, 2) for t in _vals(rep["fields"].get("total_premium", {})) if abs(t - slip_total) <= TOL})
-            if len(hit) == 1:
-                f.value, f.status = hit[0], "derived"
-                f.note = (f.note + "; " if f.note else "") + "the only total in the quote that ties to the slip total premium"
-        if f.field == "premium.net" and f.status == "conflict":
-            hit = sorted({round(n, 2) for n in _vals(rep["fields"].get("net_premium", {})) if abs(n * GST - slip_total) <= TIE_NET})
-            if len(hit) == 1:
-                f.value, f.status = hit[0], "derived"
-                f.note = (f.note + "; " if f.note else "") + "the only scenario whose net x 1.18 ties to the slip total premium"
+    by = {f.field: f for f in fields}
+    net = by.get("premium.net")
+    if net is not None and net.status == "conflict":
+        nets = _vals(rep["fields"].get("net_premium", {}))
+        hit = sorted({round(n, 2) for n in nets if abs(n * GST - slip_total) <= TIE_NET})
+        how = "the only scenario whose net x 1.18 ties to the slip total premium"
+        if len(hit) != 1:
+            hit = sorted({round(n, 2) for n in nets if abs(n - slip_total) <= TOL})
+            how = "the only net premium equal to the slip amount (the slip amount appears to exclude GST)"
+        if len(hit) == 1:
+            net.value, net.status = hit[0], "derived"
+            net.note = (net.note + "; " if net.note else "") + how
+    fin = by.get("premium.final")
+    if fin is not None and fin.status == "conflict":
+        totals = _vals(rep["fields"].get("total_premium", {}))
+        hit = sorted({round(t, 2) for t in totals if abs(t - slip_total) <= TOL})
+        how = "the only total in the quote that ties to the slip total premium"
+        if len(hit) != 1 and net is not None and net.status == "derived" and isinstance(net.value, (int, float)):
+            hit = sorted({round(t, 2) for t in totals if abs(t - net.value * GST) <= TIE_NET})
+            how = "the only total in the quote equal to the chosen net premium x 1.18"
+        if len(hit) == 1:
+            fin.value, fin.status = hit[0], "derived"
+            fin.note = (fin.note + "; " if fin.note else "") + how
     return fields
 
 

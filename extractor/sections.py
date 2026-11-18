@@ -150,10 +150,10 @@ def sec7(sections: dict, money: dict):
 LAGHU_GROUP = [(r"bharat laghu|laghu udyam suraksha|fire", 1), (r"burglary", 3), (r"money|cash", 7), (r"public liability", 13), (r"machinery", 4), (r"electronic", 5)]
 
 
-def laghu_terms(sh) -> dict:
+def laghu_terms(sh, default_sec: int | None = None) -> dict:
     """Deductible / Conditions blocks. Two heading orders occur: a mode heading first and cover headings under it (Laghu), or an explicit
     "Section - N ..." heading first with Excess / Conditions sub-headings under it (SFSP-style quotes)."""
-    mode, sec, sub, explicit = None, None, None, False
+    mode, sec, sub, explicit = None, default_sec, None, False      # default_sec: a single-section quote whose text has no section headings
     ded, cond, allc, subg = {}, {}, [], {}
     for _, cells in sh.rows:
         texts = [_txt(v) for c, v in cells if isinstance(v, str) and _txt(v)]
@@ -165,13 +165,17 @@ def laghu_terms(sh) -> dict:
         if mnum and len(t) < 80 and not any(is_num(v) for _, v in cells):
             sec, sub, explicit, mode = int(mnum.group(1)), None, True, None
             continue
+        if explicit and sec and re.match(r"^excess\b\s*[-:]?\s*\S", low) and len(t) > 12 and not re.match(r"^excess\s*/\s*deductible", low):
+            ded.setdefault(sec, []).append(t)          # "Excess 5% of claim amount ..." printed as one line under its section heading
+            mode = None
+            continue
         if re.match(r"^(?:excess\s*/\s*)?deductibles?\b|^excess\s*:?$", low):
             mode, sub = "ded", None
-            sec = sec if explicit else None
+            sec = sec if explicit else default_sec
             continue
-        if re.match(r"^conditions\s*[,/]\s*warranties|^coverages\s*/\s*clauses", low):
+        if re.match(r"^conditions\s*[,/]\s*warranties|^coverages\s*/\s*clauses|^terms\s*/\s*conditions", low):
             mode, sub = "cond", None
-            sec = sec if explicit else None
+            sec = sec if explicit else default_sec
             continue
         if re.match(r"^conditions applicable to all", low):
             mode, sec, sub, explicit = "all", None, None, False
@@ -235,7 +239,26 @@ def _legacy(path, variant, out) -> bool:
     return True
 
 
-def _fill_generic(out: dict, got: dict) -> None:
+def _term_lines(t: dict) -> int:
+    return sum(len(v) for k in ("conditions", "deductibles") for v in t[k].values()) + len(t["all"])
+
+
+def _best_terms(sheets, preferred, default_sec=None) -> dict | None:
+    """The same heading-driven term reader, run on the sheet the table came from first and then on every other visible sheet; the sheet that
+    yields the most term lines wins (a quote can keep its premium summary and its terms on different sheets)."""
+    best, best_n = None, 0
+    for sh in [preferred] + [s for s in sheets if s is not preferred and s.visible]:
+        try:
+            t = laghu_terms(sh, default_sec)
+        except Exception:
+            continue
+        n = _term_lines(t)
+        if n > best_n:
+            best, best_n = t, n
+    return best
+
+
+def _fill_generic(out: dict, got: dict, sheets=()) -> None:
     """Copy a profile / discovered read into the common section structure."""
     out["layout"] = got["reader"]
     out["net"] = got.get("net_used")
@@ -249,10 +272,7 @@ def _fill_generic(out: dict, got: dict) -> None:
             row["note"] = "single-section quote: the whole premium is assigned to Section 1"
     out["gross"] = got.get("gross")
     out["layout_info"] = got["layout_info"] | {"reader": got["reader"], "verified": got["verified"], "net_cell": got.get("net_ref")}
-    try:
-        out["terms"] = laghu_terms(got["sheet"])            # the same heading-driven term reader, headings found by section name
-    except Exception:
-        pass
+    out["terms"] = _best_terms(sheets, got["sheet"], 1 if got["reader"] == "location_matrix" else None) or out["terms"]
     if not got["verified"]:
         out["warnings"].append("sections were read by a generic recipe but the section premiums do not add up to the net premium; shown as check")
 
@@ -272,11 +292,11 @@ def read(path: str, variant: str | None = None, net: float | None = None, slip: 
     else:
         got = engine.apply_profiles(sheets, net)
         if got:
-            _fill_generic(out, got)
+            _fill_generic(out, got, sheets)
         elif not _legacy(path, variant, out):
             got = engine.discover(sheets, net)
             if got:
-                _fill_generic(out, got)
+                _fill_generic(out, got, sheets)
             else:
                 out["layout_info"] = {"source": "unsupported", "profile": None, "teach": True}
                 out["warnings"].append("layout not recognised: no built-in reader, stored profile or generic recipe fits this quote. "

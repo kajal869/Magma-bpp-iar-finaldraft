@@ -114,6 +114,84 @@ def read_table(sheet, t: dict) -> dict | None:
             "gross": gross[0] if gross else None, "gross_ref": gross[1] if gross else None, "table": t}
 
 
+# ------------------------------------------------------------------ summed table (structure, not header words)
+TOTAL_RX = re.compile(r"^(?:grand\s+)?total\s+(?:net\s+)?premium\b|^premium\s+total\b|^net\s+premium\b|^total\s+premium\b", re.I)
+ASSET_RX = re.compile(r"electrical|plant|building|shed|stock|furniture|office|content|equipment|accessor|fixture|wiring|installation|siding|pump", re.I)
+
+
+def read_summed(sheet, net: float | None = None) -> dict | None:
+    """A premium table whose header names no 'Premium' column (e.g. 'Description | Sum Insured | Insurer').
+    Found by structure: rows named after covers (Fire, Burglary, Fidelity ...), and ONE numeric column whose values over those rows add up to the
+    quote's net premium (the sheet's own 'Total Premium' row, else the resolved net). Needs >= 2 covers and an exact tie; otherwise None."""
+    from ..sections import section_no          # lazy: sections imports this package
+    cs = cells(sheet)
+    rows = []                                   # (row, section, {col: number})
+    for rn in sorted(cs):
+        if rn > 90:
+            break
+        label = next((v for c, v in sorted(cs[rn].items()) if isinstance(v, str)), None)
+        if not label or len(label) > 70 or TOTAL_RX.match(label_norm(label)) or ASSET_RX.search(label):
+            continue
+        n = section_of(label)
+        nums = {c: v for c, v in cs[rn].items() if is_num(v)}
+        if n and nums:
+            rows.append((rn, n, nums))
+    if len({n for _, n, _ in rows}) < 2:
+        return None
+    anchors = []
+    own = find_net(sheet)
+    if own:
+        anchors.append(own[0])
+    if net is not None:
+        anchors.append(net)
+    for rn in sorted(cs):                      # a "Total Premium" style row of the sheet
+        if any(isinstance(v, str) and TOTAL_RX.match(label_norm(v)) for v in cs[rn].values()):
+            anchors += [v for v in cs[rn].values() if is_num(v)]
+    cols = sorted({c for _, _, nums in rows for c in nums})
+    for col in cols:
+        vals = [(rn, n, nums[col]) for rn, n, nums in rows if col in nums]
+        if len({n for _, n, _ in vals}) < 2:
+            continue
+        total = sum(v for _, _, v in vals)
+        if not any(abs(total - a) <= max(TIE, abs(a) * 1e-6) for a in anchors):
+            continue
+        secs: dict[int, dict] = {}
+        for rn, n, v in vals:
+            d = secs.setdefault(n, {"si": None, "premium": None, "refs": []})
+            d["premium"] = (d["premium"] or 0.0) + v
+            d["refs"].append(ref(col, rn))
+            left = [nums_c for nums_c in sorted(cs[rn]) if nums_c < col and is_num(cs[rn][nums_c])]
+            if left and d["si"] is None:
+                d["si"] = cs[rn][left[0]]
+                d["refs"].append(ref(left[0], rn))
+        for n, d in secs.items():              # a cover with no sum insured on its row: look in its own block ("Section 8 - Fidelity Cover" ... "Sum Insured")
+            if d["si"] is None:
+                got = _block_si(cs, n)
+                if got:
+                    d["si"], r_ = got
+                    d["refs"].append(r_)
+        net_found = find_net(sheet)
+        gross = find_gross(sheet)
+        return {"reader": "summed_table", "sections": secs, "net": net_found[0] if net_found else total, "net_ref": net_found[1] if net_found else ref(col, vals[-1][0]),
+                "gross": gross[0] if gross else None, "gross_ref": gross[1] if gross else None, "table": {"premium_col": col}}
+    return None
+
+
+def _block_si(cs: dict, n: int):
+    for rn in sorted(cs):
+        head = next((v for c, v in sorted(cs[rn].items()) if isinstance(v, str)), None)
+        if not isinstance(head, str) or not SECTION_RX.search(head) or section_of(head) != n or len(head) > 70:
+            continue
+        for rr in range(rn + 1, rn + 14):
+            row = cs.get(rr, {})
+            lab = next((v for c, v in sorted(row.items()) if isinstance(v, str)), "")
+            if isinstance(lab, str) and label_norm(lab).startswith("sum insured"):
+                nums = [(c, v) for c, v in sorted(row.items()) if is_num(v)]
+                if nums:
+                    return nums[0][1], ref(nums[0][0], rr)
+    return None
+
+
 # ------------------------------------------------------------------ location matrix
 def read_matrix(sheet) -> dict | None:
     cs = cells(sheet)
@@ -145,7 +223,7 @@ def read_matrix(sheet) -> dict | None:
 
 # ------------------------------------------------------------------ scalars
 SCALARS = [("hypothecation", re.compile(r"hypothecation|financial interest|financier|lender|loss payee"), "text"),
-           ("business_activity", re.compile(r"business activity|type of occupation|nature of business"), "text"),
+           ("business_activity", re.compile(r"business activity|type of occupation|nature of business|insured.?s business|description of business"), "text"),
            ("premium.terrorism", re.compile(r"^premium\s*\(\s*terrorism\s*\)|^terrorism\s+premium|^terrorism\s*\(\s*premium\s*\)"), "number")]
 
 
