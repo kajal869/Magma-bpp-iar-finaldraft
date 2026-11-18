@@ -61,19 +61,29 @@ def read(path: str, imd_path: str | None = None) -> tuple[list[Field], dict]:
     # intermediary: the code is reliable, the printed name is often abbreviated ("NE0 RISK"). Only an IMD master match makes it ok.
     code, raw_name = raw.get("intermediary_code"), raw.get("intermediary_name_raw")
     put("intermediary.code", code)
-    rec = None
+    rec = cand = None
     if imd_path and (code or raw_name):
         try:
             from ..slip import imd
             hit = imd.lookup(imd_path, code=code, name=raw_name)
             if hit["status"] == "exact_code":
                 rec = hit["record"]
+            elif hit["status"] == "name_candidate" and not code:
+                cand = hit["record"]   # no code on the slip: a single broker whose name contains every printed word is only a proposal
         except Exception:
             rec = None
-    if rec:
+    if cand:
+        out = [f for f in out if f.field != "intermediary.code"]
+        out.append(Field("intermediary.code", cand["code"], "check", {"tool": "imd", "sheet": "IMD master", "cell": None, "method": "name"},
+                         note=f"the slip prints no code; the only IMD master broker matching '{raw_name}' is {cand['name']} ({cand['code']}); confirm"))
+        out.append(Field("intermediary.name", cand["name"], "check", {"tool": "imd", "sheet": "IMD master", "cell": None, "method": "name"},
+                         note=f"slip prints '{raw_name}'; proposed from the IMD master by name; confirm"))
+        raw["imd_record"] = cand
+    elif rec:
+        raw["imd_record"] = rec
         out.append(Field("intermediary.name", rec["name"], "derived", {"tool": "imd", "sheet": "IMD master", "cell": None, "method": "code"},
                          note=f"name taken from the IMD master by code {code}; slip prints '{raw_name}'"))
-    elif raw_name:
+    elif raw_name and not cand:
         out.append(Field("intermediary.name", raw_name, "check", _src("label"),
                          note="slip prints a short/abbreviated name; confirm the legal name from the IMD master"))
     else:

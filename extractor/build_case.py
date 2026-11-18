@@ -57,6 +57,12 @@ def signature_available(theme: str) -> bool:
     return all((ROOT / "app" / "assets" / n).exists() for n in names)
 
 
+def _contact(slip: dict, key: str) -> str:
+    """Mobile / e-mail of the intermediary, from the IMD master record found for this slip (blank when there was no match)."""
+    rec = slip.get("imd_record") or {}
+    return str((rec.get("mobile") if key == "mobile" else rec.get("email")) or "")
+
+
 def _lines(v) -> list[str]:
     if isinstance(v, list):
         return v
@@ -87,7 +93,7 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
                        "business_activity": hdr.get("type of occupation") or hdr.get("business_description") or "", "occupancy": occ or hdr.get("occupancy") or ""}
     case["period"] = {"start": val("period.start"), "end": val("period.end"), "start_time": case["period"].get("start_time", "00:01")}
     code = val("intermediary.code")
-    case["intermediary"] = {"name": val("intermediary.name"), "code": code, "mobile": "", "email": "",
+    case["intermediary"] = {"name": val("intermediary.name"), "code": code, "mobile": _contact(slip, "mobile"), "email": _contact(slip, "email"),
                             "kind": "imd" if str(code).startswith("BRC") and "commercial" in str(val("product.name")).lower() else "agent_broker"}
     case["product"] = {**case["product"], "name": val("product.name", case["product"]["name"]), "title_upper": str(val("product.name", case["product"]["name"])).upper(),
                        "uin": slip.get("uin") or case["product"]["uin"], "code": int(slip["product_code"]) if str(slip.get("product_code") or "").isdigit() else case["product"]["code"]}
