@@ -122,3 +122,76 @@ def test_closing_slip_allocation_is_a_check_fallback(tmp_path):
     r = sections.read(str(q), slip={"pd_allocation": 590_875_967, "bi_allocation": 1})
     assert r["sections"][1]["sum_insured"] == 590_875_967 and r["sections"][1]["status"] == "check"
     assert r["sections"][2]["sum_insured"] is None                              # 1 is a share, not a sum insured
+
+
+def headerless_table(path, fidelity=155000.0):
+    """The premium column is headed 'Insurer' (no word 'Premium'); the covers are named by their rows; the fidelity sum insured is in its own block."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Stock"
+    ws.append(["Description", None, "Sum Insured INR", "Insurer"])
+    ws.append([None, "Standard Fire and Special Perils", 9_000_000, 1000.0])
+    ws.append([None, "Burglary", 9_000_000, 70.0])
+    ws.append([None, "Premium Total without terrorism", None, 1070.0])
+    ws.append([None, "Fidelity", None, fidelity])
+    ws.append([None, "Total Premium", None, 1070.0 + fidelity])
+    ws.append([])
+    ws.append(["Section 8 - Fidelity Cover"])
+    ws.append([None, "Sum Insured", 1_000_000])
+    wb.save(path)
+
+
+def test_summed_table_found_by_structure_not_header_words(tmp_path, learned_dir):
+    q = tmp_path / "h.xlsx"
+    headerless_table(q)
+    r = sections.read(str(q))
+    s = r["sections"]
+    assert r["layout"] == "summed_table" and r["layout_info"]["verified"]
+    assert (s[1]["sum_insured"], s[1]["premium"]) == (9_000_000, 1000.0)
+    assert (s[3]["sum_insured"], s[3]["premium"]) == (9_000_000, 70.0)
+    assert (s[8]["sum_insured"], s[8]["premium"]) == (1_000_000, 155000.0)      # sum insured taken from the cover's own block
+    assert s[1]["status"] == "ok"
+
+
+def test_summed_table_needs_an_exact_tie(tmp_path, learned_dir):
+    q = tmp_path / "h.xlsx"
+    headerless_table(q)
+    wb = openpyxl.load_workbook(q)
+    wb.active["D6"] = 5000.0                                                   # the stated total no longer equals the rows
+    wb.save(q)
+    r = sections.read(str(q), net=None)
+    assert r["layout"] != "summed_table"
+
+
+def test_discovery_never_overwrites_a_taught_profile(tmp_path, learned_dir):
+    q = tmp_path / "h.xlsx"
+    headerless_table(q)
+    fp = sorted(engine.fingerprint(load(str(q))))
+    pid = "p_" + engine.h("|".join(fp))
+    store.save({"id": pid, "source": "taught", "fingerprint": fp, "recipes": [{"type": "cell", "target": "premium.net", "sheet": "x", "ref": "D6", "kind": "number"}], "uses": 0})
+    sections.read(str(q))
+    types = [r["type"] for r in store.get(pid)["recipes"]]
+    assert "cell" in types and "summed_table" in types
+
+
+def test_excess_line_and_single_section_default_in_terms(tmp_path):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Section – 3- Burglary & House Breaking Cover"])
+    ws.append(["Excess 5% of claim amount subject to min of INR 5,000/-"])
+    ws.append(["Terms/Conditions /Clause"])
+    ws.append(["Terrorism cover is excluded"])
+    p = tmp_path / "t.xlsx"
+    wb.save(p)
+    t = sections.laghu_terms(load(str(p))[0])
+    assert t["deductibles"][3] == ["Excess 5% of claim amount subject to min of INR 5,000/-"] and t["conditions"][3] == ["Terrorism cover is excluded"]
+    wb2 = openpyxl.Workbook()
+    w2 = wb2.active
+    w2.append(["Deductible/Excess"])
+    w2.append(["5% of claim"])
+    w2.append(["Conditions / Warranties / Clauses"])
+    w2.append(["Warranted no Kutcha construction"])
+    p2 = tmp_path / "t2.xlsx"
+    wb2.save(p2)
+    assert sections.laghu_terms(load(str(p2))[0]) ["conditions"] == {}                 # no section known: nothing is guessed
+    assert sections.laghu_terms(load(str(p2))[0], default_sec=1)["conditions"] == {1: ["Warranted no Kutcha construction"]}

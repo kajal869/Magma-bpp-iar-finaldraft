@@ -9,7 +9,7 @@ from __future__ import annotations
 from . import store
 from .common import h, shape
 from .fingerprint import fingerprint, overlap
-from .recipes import TIE, find_table, read_matrix, read_scalars, read_table, resolve_cell
+from .recipes import TIE, find_table, read_matrix, read_scalars, read_summed, read_table, resolve_cell
 
 MIN_OVERLAP = 0.5
 
@@ -23,13 +23,15 @@ def _verify(res: dict, net: float | None) -> tuple[bool, float | None]:
     return abs(total - use) <= max(TIE, abs(use) * 1e-6), use
 
 
-def _run_recipe(sheets, rec: dict):
+def _run_recipe(sheets, rec: dict, net=None):
     """Apply one stored recipe: the sheet of the recorded shape first, then any visible sheet; the recipe's own spec must still match."""
     ordered = sorted((s for s in sheets if s.visible), key=lambda s: h(shape(s.name)) != rec.get("sheet"))
     for s in ordered:
         if rec["type"] == "labelled_table":
             t = find_table(s, rec["spec"])
             r = read_table(s, t) if t else None
+        elif rec["type"] == "summed_table":
+            r = read_summed(s, net)
         else:
             r = read_matrix(s)
         if r:
@@ -52,8 +54,8 @@ def apply_profiles(sheets, net=None):
         if ov < MIN_OVERLAP:
             break
         for rec in p.get("recipes", []):
-            if rec["type"] in ("labelled_table", "location_matrix"):
-                got = _run_recipe(sheets, rec)
+            if rec["type"] in ("labelled_table", "location_matrix", "summed_table"):
+                got = _run_recipe(sheets, rec, net)
                 if got:
                     res, sh = got
                     out = _result(res, sh, {"profile": p["id"], "source": p.get("source", "learned"), "overlap": round(ov, 2), "net": net})
@@ -70,11 +72,14 @@ def discover(sheets, net=None, save=True):
     for s in sheets:
         if not s.visible:
             continue
-        for kind in ("labelled_table", "location_matrix"):
+        for kind in ("labelled_table", "summed_table", "location_matrix"):
             if kind == "labelled_table":
                 t = find_table(s)
                 r = read_table(s, t) if t else None
                 rec = {"type": "labelled_table", "sheet": h(shape(s.name)), "spec": t["spec"]} if t else None
+            elif kind == "summed_table":
+                r = read_summed(s, net)
+                rec = {"type": "summed_table", "sheet": h(shape(s.name))} if r else None
             else:
                 r = read_matrix(s)
                 rec = {"type": "location_matrix", "sheet": h(shape(s.name))} if r else None
@@ -86,7 +91,9 @@ def discover(sheets, net=None, save=True):
                 if save:
                     fp = sorted(fingerprint(sheets))
                     pid = "p_" + h("|".join(fp))
-                    prof = store.save({"id": pid, "source": "auto", "fingerprint": fp, "recipes": [rec], "uses": 0})
+                    old = store.get(pid)               # never overwrite a profile a person taught: add the recipe next to the taught cells
+                    prof = store.save({**old, "recipes": old["recipes"] + ([rec] if rec not in old["recipes"] else [])} if old and old.get("_dir") == "learned"
+                                      else {"id": pid, "source": "auto", "fingerprint": fp, "recipes": [rec], "uses": 0})
                     out["layout_info"]["profile"] = prof["id"]
                     out["layout_info"]["saved"] = True
                 return out

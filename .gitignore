@@ -55,3 +55,6 @@ extractor/layouts/learned/
 # IMD master (private contact data)
 Non Motor IMD Contact details*
 ~$*
+
+# gap-analysis reports (contain case data)
+reports/

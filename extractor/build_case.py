@@ -60,7 +60,9 @@ def signature_available(theme: str) -> bool:
 def _contact(slip: dict, key: str) -> str:
     """Mobile / e-mail of the intermediary, from the IMD master record found for this slip (blank when there was no match)."""
     rec = slip.get("imd_record") or {}
-    return str((rec.get("mobile") if key == "mobile" else rec.get("email")) or "")
+    if key == "mobile":   # IMD master columns: D telephone, E mobile; the draft has one number slot, so mobile first, telephone when there is no mobile
+        return str(rec.get("mobile") or rec.get("phone") or "")
+    return str(rec.get("email") or "")
 
 
 def _lines(v) -> list[str]:

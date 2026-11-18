@@ -104,6 +104,21 @@ export default function Review({ data, onBack, onGenerate }: Props) {
 
       {data.warnings.map((w) => <div className="banner warn-banner fade-up" key={w}>{w}</div>)}
 
+      {(data.crossChecks ?? []).length > 0 && (
+        <div className="card xcheck fade-up">
+          <h3>Closing slip vs quote</h3>
+          <p className="muted">The printed values come from the closing slip. This is what the quote says about the same items.</p>
+          {(data.crossChecks ?? []).map((x) => (
+            <div className={`xrow ${x.agree ? "x-agree" : "x-differ"}`} key={x.label}>
+              <span className="xl">{x.label}</span>
+              <span className="xv"><em>Slip</em>{x.slip}</span>
+              <span className="xv"><em>Quote</em>{x.quote}</span>
+              <span className={`badge ${x.agree ? "b-ok" : "b-check"}`}>{x.agree ? "Match" : "Differs"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="tabs fade-up" style={{ animationDelay: "80ms" }}>
         {([["all", "All fields", rows.length], ["missing", "Missing", missing.length], ["check", "To check", check.length]] as [Filter, string, number][]).map(([k, label, n]) => (
           <button key={k} className={`tab${filter === k ? " on" : ""}`} onClick={() => setFilter(k)}>{label}<span>{n}</span></button>

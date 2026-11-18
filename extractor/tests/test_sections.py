@@ -74,3 +74,35 @@ def test_assemble_blank_system_fields_and_no_invented_values(tmp_path):
     assert case["system"]["policy_no"] == "" and case["system"]["magma_gstin"] == ""
     assert len(case["schedule"]["sections"]) == 13
     assert any("house conventions" in n for n in notes)
+
+
+def _sheet(rows):
+    from extractor.legacy.grid import Sheet
+    return Sheet("Q", True, [(i + 1, [(j + 1, v) for j, v in enumerate(r) if v is not None]) for i, r in enumerate(rows)])
+
+
+def _out(net, **secs):
+    out = {"sections": sections._empty_sections(), "net": net}
+    for n, (si, pr) in secs.items():
+        out["sections"][int(n[1:])].update(sum_insured=si, premium=pr, status="ok")
+    return out
+
+
+def test_unsplit_premium_is_flagged():
+    """Net premium put on one section while the same sheet has Burglary / Fidelity rows with amounts: flagged, values untouched."""
+    sh = _sheet([["Fire", 5000000, 90000], ["Burglary", 5000000, 7000], ["Fidelity", 1000000, 3000], ["Total Premium", None, 100000]])
+    out = _out(100000.0, s1=(5000000, 100000.0))
+    w = sections._missed_sections(out, [sh])
+    assert w and "section 3" in w[0] and "section 8" in w[0]
+    assert out["sections"][1]["status"] == "check" and out["sections"][1]["premium"] == 100000.0
+
+
+def test_asset_lines_are_not_mistaken_for_sections():
+    sh = _sheet([["Electrical Machinery", 25000000, 1282000], ["Plant & Machineries", 4000000, 2000000], ["Total Premium", None, 6660000]])
+    assert sections._missed_sections(_out(6660000.0, s1=(13000000, 6660000.0)), [sh]) == []
+
+
+def test_well_split_quote_is_not_flagged():
+    sh = _sheet([["Burglary", 5000000, 7000], ["Total Premium", None, 100000]])
+    out = _out(100000.0, s1=(5000000, 93000.0), s3=(5000000, 7000.0), s8=(1000000, 0.0))
+    assert sections._missed_sections(out, [sh]) == []
