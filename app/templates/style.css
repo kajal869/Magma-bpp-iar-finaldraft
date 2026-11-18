@@ -69,7 +69,7 @@ b, .b { font-weight: 700; }
 .terms ul { list-style: none; margin: 0; padding: 0; }
 .terms li { position: relative; padding-left: 28pt; margin: 0 0 1pt 0; }
 .terms li.bl { font-weight: 700; margin-top: 8pt; margin-bottom: 8pt; }
-.terms li::before { content: "\27A2"; position: absolute; left: 12pt; font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif; font-size: 10pt; }
+.terms li::before { content: "\27A2"; position: absolute; left: 12pt; font-family: "Segoe UI Symbol", "Arial Unicode MS", sans-serif; font-size: 11pt; }
 .terms .sub-title { font-weight: 400; margin: 6pt 0 5pt 12pt; }
 .terms table.ded { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt 0; }
 .terms table.ded td { border: 0.75pt solid #000; padding: 1pt 4pt; vertical-align: top; }
@@ -131,8 +131,8 @@ table.at tr.grand td { background: var(--grand); font-weight: 700; }
 .theme-valmet table.at tr.tot td.r, .theme-laghu table.at tr.tot td.r,
 .theme-valmet table.at tr.grand td.r, .theme-laghu table.at tr.grand td.r { text-align: right; }
 table.at td.srn { width: 7%; text-align: left; }
-table.at.matrix { font-size: 9pt; }
-table.at.matrix th, table.at.matrix td { font-size: 9pt; }
+table.at.matrix { font-size: 11pt; }
+table.at.matrix th, table.at.matrix td { font-size: 11pt; }
 table.at.matrix th { background: #fff; color: #000; border: 0; text-align: center; vertical-align: bottom; }
 table.at.matrix td { border: 0; vertical-align: top; }
 table.at.matrix td.addr { width: 17%; }

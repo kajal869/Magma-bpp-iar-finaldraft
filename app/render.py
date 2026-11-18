@@ -110,11 +110,11 @@ def load_wording(d):
             p["text"] = p["text"].replace("", "•")
             if p.get("type") == "table":
                 p["rows"] = [[c.replace("", "•") for c in r] for r in p["rows"]]
-                p["indent"], p["heading"], p["fs"] = 0, False, 9.5
+                p["indent"], p["heading"], p["fs"] = 0, False, 11
                 continue
             p["indent"] = max(0, min(p["x"] - x0, 120))
             p["heading"] = bool(p["bold"]) and len(p["text"]) < 110
-            p["fs"] = round(max(9, min(p.get("size") or 11, 12)) * d["presentation"].get("wording_scale", 1.0), 1)
+            p["fs"] = 11
         blocks.append({"name": b["block"], "paragraphs": paras, "new_page": bool(b.get("new_page", True)) or not blocks})
     return blocks
 
