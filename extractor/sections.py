@@ -288,7 +288,43 @@ def read(path: str, variant: str | None = None, net: float | None = None, slip: 
     _from_slip(out, slip or {})
     _drop_unopted_terms(out)
     out["warnings"] += _status(out)
+    out["warnings"] += _missed_sections(out, sheets)
     return out
+
+
+ASSET_WORDS = re.compile(r"electrical|plant|building|shed|stock|furniture|office|content|equipment|accessor|fixture|wiring|installation|siding|pump", re.I)
+
+
+def _missed_sections(out: dict, sheets) -> list[str]:
+    """Guard against an unsplit premium: when only one or two sections were read, but the sheet that carries the net premium also has rows
+    named after other covers (Burglary, Fidelity, Money ...) with amounts, the section split is probably incomplete (the net premium sits on
+    one section). Values are not changed; the extracted sections are flagged `check` and the user is told where the rows are."""
+    secs, net = out["sections"], out.get("net")
+    have = [s for s in secs.values() if s["sum_insured"] is not None or s["premium"] is not None]
+    if net is None or not have or len(have) > 2:
+        return []
+    found: dict[int, str] = {}
+    for sh in sheets:
+        if not sh.visible or not any(is_num(v) and abs(v - net) <= 1 for _, cells in sh.rows for _, v in cells):
+            continue
+        for rn, cells in sh.rows:
+            if rn > 220:
+                break
+            label = next((v for _, v in cells if isinstance(v, str)), None)
+            if not label or len(label) > 70:
+                continue
+            n = None if ASSET_WORDS.search(label) else section_no(label)       # "Electrical Machinery" is an asset line, not the machinery-breakdown cover
+            if n is None or n in found or secs[n]["sum_insured"] is not None or secs[n]["premium"] is not None:
+                continue
+            if any(is_num(v) and 100 <= v < net for c, v in cells if c > 1):
+                found[n] = f"{sh.name} row {rn} ('{label.strip()[:40]}')"
+    if not found:
+        return []
+    names = ", ".join(f"section {n} at {w}" for n, w in sorted(found.items()))
+    for s in have:
+        s["status"] = "check"
+        s["note"] = (s["note"] + "; " if s["note"] else "") + f"the quote also has rows for {names}, but they were not read; the premium split may be incomplete"
+    return [f"possible unsplit premium: the quote also has rows for {names} that were not extracted; check the section premiums"]
 
 
 def _apply_taught(out: dict, taught: dict) -> None:

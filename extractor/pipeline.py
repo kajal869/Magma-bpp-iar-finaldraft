@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from . import sections as sections_mod
-from .adapters import addons, headline, slip as slip_adapter
+from .adapters import addons, headline, quote_identity, slip as slip_adapter
 from .resolver import resolve
 
 
@@ -24,6 +24,14 @@ def run(slip_path: str, quote_path: str, imd_path: str | None = None) -> dict:
     except Exception as e:
         info = {}
         warnings.append(f"quote headline could not be read: {type(e).__name__}: {e}")
+    cross = []
+    try:   # the quote's own statement of insured name / address, compared with the slip (the slip value stays the printed one)
+        slip_name = next((f.value for f in fields if f.field == "insured.name" and f.source.get("tool") == "slip"), None)
+        qf, qw, cross = quote_identity.cross_check(quote_path, slip_name, raw.get("insured_address"))
+        fields += qf
+        warnings += qw
+    except Exception as e:
+        warnings.append(f"quote identity cross-check failed: {type(e).__name__}: {e}")
     rows, w = addons.read(quote_path, info.get("variant"))
     warnings += w
     resolved = resolve(fields)
@@ -35,7 +43,7 @@ def run(slip_path: str, quote_path: str, imd_path: str | None = None) -> dict:
         sec = None
         warnings.append(f"sections could not be read: {type(e).__name__}: {e}")
     resolved = _extras(_from_sections(resolved, sec, slip_total), sec)
-    return {"fields": resolved, "addons": rows, "sections": sec, "slip": raw, "warnings": warnings, "variant": info.get("variant")}
+    return {"fields": resolved, "addons": rows, "sections": sec, "slip": raw, "warnings": warnings, "variant": info.get("variant"), "cross_checks": cross}
 
 
 def _extras(fields: list, sec: dict | None) -> list:

@@ -120,3 +120,30 @@ def test_policy_period_must_be_twelve_months_or_it_is_a_check(tmp_path):
         wb.save(p)
         f = {x.field: x for x in slip_adapter.read(str(p))[0]}
         assert f["period.start"].status == expect and f["period.end"].status == expect
+
+
+def test_quote_identity_similarity_ignores_company_suffixes_and_brackets():
+    from extractor.adapters.quote_identity import similarity
+    assert similarity("APA ENGINEERING PRIVATE LIMITED", "M/s. APA Engineering Pvt Ltd") == 1.0
+    assert similarity("LOUIS DREYFUS COMPANY INDIA PRIVATE LIMITED.", "Louis Dreyfus Company India Private Limited (Including all subsidiary companies)") == 1.0
+    assert similarity("TOWELL ENGINEERING INTERNATIONAL LLP", "Kasliwal Automotive Pvt Ltd") == 0.0
+
+
+def test_quote_naming_another_insured_is_flagged_not_overwritten(tmp_path):
+    import openpyxl
+    from extractor.adapters import quote_identity
+    from extractor.resolver import resolve
+    from extractor.envelope import Field
+    p = tmp_path / "q.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Name of the Insured", None, "Kasliwal Automotive Pvt Ltd"])
+    ws.append(["Insured's Communication Address", None, "Halka 17, Indore"])
+    wb.save(p)
+    fields, warns, rows = quote_identity.cross_check(str(p), "TOWELL ENGINEERING LLP", "Rourkela Odisha")
+    assert [f.field for f in fields] == ["insured.name"] and any("different insured" in w for w in warns) and not rows[0]["agree"]
+    slip = Field("insured.name", "TOWELL ENGINEERING LLP", "ok", {"tool": "slip"})
+    got = {f.field: f for f in resolve([slip] + fields)}["insured.name"]
+    assert got.value == "TOWELL ENGINEERING LLP" and got.status == "check" and got.alternatives[1]["value"] == "Kasliwal Automotive Pvt Ltd"
+    ok_fields, ok_warns, _ = quote_identity.cross_check(str(p), "Kasliwal Automotive Private Limited", "Halka 17 Indore")
+    assert ok_fields == [] and not any("different insured" in w for w in ok_warns)
