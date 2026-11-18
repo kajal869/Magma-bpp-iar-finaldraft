@@ -118,7 +118,15 @@ def sweep():
 
 
 # ---------------------------------------------------------------- API
-IMD_PATH = os.environ.get("BPP_IMD_PATH") or None      # optional IMD master (.xlsb) for broker legal names
+def _default_imd() -> str | None:
+    """IMD master (.xlsb) for broker legal names and contacts: BPP_IMD_PATH, else a 'Non Motor IMD Contact details*.xlsb' in the project folder."""
+    if os.environ.get("BPP_IMD_PATH"):
+        return os.environ["BPP_IMD_PATH"]
+    hits = sorted(p for p in Path(__file__).resolve().parents[1].glob("Non Motor IMD Contact details*.xlsb") if not p.name.startswith("~$"))
+    return str(hits[0]) if hits else None
+
+
+IMD_PATH = _default_imd()
 
 
 class AddonEdit(BaseModel):
@@ -266,6 +274,8 @@ def analyze(closing_slip: UploadFile = File(...), quote: UploadFile = File(...))
         notes.append(f"{n_cond} condition / warranty lines in the quote have no insurer remark, so they are treated as conditions (see Conditions below), not add-on covers.")
     return {"sessionId": sid, "summary": summary, "fields": fields, "groups": fields_mod.GROUPS, "warnings": warnings, "layout": (res.get("sections") or {}).get("layout"),
             "addons": addons, "sections": _sections_payload(res.get("sections")), "terms": _terms_payload(case),
+            "crossChecks": [{"label": {"insured.name": "Insured name", "insured.address": "Insured address"}.get(x["field"], x["field"]), "slip": x["slip"], "quote": x["quote"], "agree": x["agree"]}
+                            for x in res.get("cross_checks", [])],
             "notes": notes + ["Policy-system values (policy number, invoice number, Magma GSTIN, ...) are not in the two files, so they start empty."]
                      + (["The ACME demo sample is offering values for those policy-system fields."] if suggest else [])}
 

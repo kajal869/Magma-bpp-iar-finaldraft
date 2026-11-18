@@ -120,3 +120,65 @@ def test_policy_period_must_be_twelve_months_or_it_is_a_check(tmp_path):
         wb.save(p)
         f = {x.field: x for x in slip_adapter.read(str(p))[0]}
         assert f["period.start"].status == expect and f["period.end"].status == expect
+
+
+def test_quote_identity_similarity_ignores_company_suffixes_and_brackets():
+    from extractor.adapters.quote_identity import similarity
+    assert similarity("APA ENGINEERING PRIVATE LIMITED", "M/s. APA Engineering Pvt Ltd") == 1.0
+    assert similarity("LOUIS DREYFUS COMPANY INDIA PRIVATE LIMITED.", "Louis Dreyfus Company India Private Limited (Including all subsidiary companies)") == 1.0
+    assert similarity("TOWELL ENGINEERING INTERNATIONAL LLP", "Kasliwal Automotive Pvt Ltd") == 0.0
+
+
+def test_quote_naming_another_insured_is_flagged_not_overwritten(tmp_path):
+    import openpyxl
+    from extractor.adapters import quote_identity
+    from extractor.resolver import resolve
+    from extractor.envelope import Field
+    p = tmp_path / "q.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Name of the Insured", None, "Kasliwal Automotive Pvt Ltd"])
+    ws.append(["Insured's Communication Address", None, "Halka 17, Indore"])
+    wb.save(p)
+    fields, warns, rows = quote_identity.cross_check(str(p), "TOWELL ENGINEERING LLP", "Rourkela Odisha")
+    assert [f.field for f in fields] == ["insured.name"] and any("different insured" in w for w in warns) and not rows[0]["agree"]
+    slip = Field("insured.name", "TOWELL ENGINEERING LLP", "ok", {"tool": "slip"})
+    got = {f.field: f for f in resolve([slip] + fields)}["insured.name"]
+    assert got.value == "TOWELL ENGINEERING LLP" and got.status == "check" and got.alternatives[1]["value"] == "Kasliwal Automotive Pvt Ltd"
+    ok_fields, ok_warns, _ = quote_identity.cross_check(str(p), "Kasliwal Automotive Private Limited", "Halka 17 Indore")
+    assert ok_fields == [] and not any("different insured" in w for w in ok_warns)
+
+
+def test_slip_amount_equal_to_net_selects_the_sheet_and_is_derived():
+    from extractor.adapters import headline
+    from extractor.envelope import Field
+    rep = {"fields": {"net_premium": {"value": None, "evidence": [{"value": 420650.0}, {"value": 89346.55}]},
+                      "total_premium": {"value": None, "evidence": [{"value": 496367.0}, {"value": 105428.93}]}}}
+    fields = [Field("premium.net", None, "conflict"), Field("premium.final", None, "conflict")]
+    out = {f.field: f for f in headline._apply_net_tie(fields, rep, 420650.0)}
+    assert out["premium.net"].value == 420650.0 and out["premium.net"].status == "derived" and "exclude GST" in out["premium.net"].note
+    assert out["premium.final"].value == 496367.0 and out["premium.final"].status == "derived"
+    amb = {f.field: f for f in headline._apply_net_tie([Field("premium.net", None, "conflict")], {"fields": {"net_premium": {"evidence": [{"value": 100.0}, {"value": 100.5}]}}}, 100.0)}
+    assert amb["premium.net"].status == "conflict"            # two candidates within tolerance of the slip amount: nothing is picked
+
+
+def test_slip_arithmetic_checks():
+    from extractor.adapters.slip import slip_checks
+    good = {"our_share": 0.35, "our_share_premium": 350.0, "co_insurers": [{"name": "Magma", "share": 0.35}, {"name": "UIIC", "share": 0.65}], "magma_role": "Leader"}
+    assert slip_checks(good, 1000.0) == []
+    bad = {"our_share": 0.35, "our_share_premium": 400.0, "co_insurers": [{"name": "Magma", "share": 0.40}, {"name": "UIIC", "share": 0.65}], "magma_role": "Follower"}
+    w = " | ".join(slip_checks(bad, 1000.0))
+    assert "Our Share Premium" in w and "add up" in w and "co-share row says 0.4" in w
+    assert "follower but holds a 100%" in " | ".join(slip_checks({"our_share": 1, "magma_role": "Follower"}, None))
+
+
+def test_quote_side_regression_checks():
+    from extractor.envelope import Field
+    from extractor.regress import quote_checks
+    sec = {1: {"sum_insured": 100.0, "premium": 10.0, "status": "ok"}, 3: {"sum_insured": 50.0, "premium": 4.0, "status": "check"}, 8: {"sum_insured": None, "premium": None, "status": "not_found"}}
+    res = {"sections": {"sections": sec, "terms": {"deductibles": {1: ["x"]}, "conditions": {}}}, "fields": [Field("hypothecation", ["Axis Bank"], "ok")]}
+    out = quote_checks(res, {"sections": {"1": [100, 15.0], "3": [50, 4], "8": [1, 1]}, "hypothecation": ["AXIS BANK"], "terms": {"deductibles": True, "conditions": True}})
+    d = {k: v[0] for k, v in out["detail"].items()}
+    assert d["section 1 si"] == "correct" and d["section 1 premium"] == "SILENT_WRONG"       # shown as ok but different from the key
+    assert d["section 3 premium"] == "flagged" and d["section 8 si"] == "missing"
+    assert d["hypothecation"] == "correct" and d["terms deductibles"] == "correct" and d["terms conditions"] == "missing"

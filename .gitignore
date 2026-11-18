@@ -51,3 +51,10 @@ app/assets/sig_*.png
 
 # learned layout profiles (private, written automatically)
 extractor/layouts/learned/
+
+# IMD master (private contact data)
+Non Motor IMD Contact details*
+~$*
+
+# gap-analysis reports (contain case data)
+reports/
