@@ -22,8 +22,8 @@ F = [
     ("period.end", "Policy end date", "Policy period", "period.end", "date", False, True, "policy_end"),
     ("intermediary.name", "Broker / agent name", "Intermediary", "intermediary.name", "text", False, True, "intermediary_name"),
     ("intermediary.code", "Broker / agent code", "Intermediary", "intermediary.code", "text", False, True, "intermediary_code"),
-    ("intermediary.mobile", "Broker mobile", "Intermediary", "intermediary.mobile", "text", True, False, None),
-    ("intermediary.email", "Broker email", "Intermediary", "intermediary.email", "text", True, False, None),
+    ("intermediary.mobile", "Broker mobile / phone", "Intermediary", "intermediary.mobile", "text", False, False, None),
+    ("intermediary.email", "Broker email", "Intermediary", "intermediary.email", "text", False, False, None),
     ("system.policy_no", "Policy number", "Policy and invoice", "system.policy_no", "text", True, True, None),
     ("system.issue_date", "Issue date", "Policy and invoice", "system.issue_date", "date", True, True, None),
     ("system.servicing_office", "Policy servicing office", "Policy and invoice", "system.servicing_office.address_lines", "lines", True, True, None),
@@ -139,6 +139,11 @@ def build_fields(case: dict, env: dict, suggest: dict | None = None, values: dic
                 alts = [{"value": _alt_text(kind, a["value"]), "label": TOOL.get((a.get("source") or {}).get("tool"), "?")
                          + (f" ({a['source']['sheet']})" if (a.get("source") or {}).get("sheet") else "")} for a in ef.alternatives]
                 note = ef.note or "The extractor could not settle this value"
+        elif key in ("intermediary.mobile", "intermediary.email"):
+            if value.strip():
+                source, note = "IMD master (by broker code)", None
+            else:
+                status, source, note = "missing", "Not in the IMD master", "The broker's contact is taken from the IMD master; no record or no value for this broker."
         elif key == "premium.basic":
             status, source, note = "check", "Net premium (derived)", "Terrorism part of the premium is not in the files; basic = net, terrorism = 0"
         elif key == "hypothecation":
