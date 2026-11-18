@@ -94,3 +94,10 @@
   .review-top { grid-template-columns: 1fr; text-align: center; justify-items: center; }
   .frow { grid-template-columns: 1fr; }
 }
+
+.xcheck { margin-bottom: 16px; }
+.xcheck h3 { margin: 0 0 4px; }
+.xrow { display: grid; grid-template-columns: 120px 1fr 1fr auto; gap: 12px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line, #e6e6ea); font-size: 14px; }
+.xrow .xv em { display: block; font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .6; }
+.xrow.x-differ .xv { color: #8a5a06; }
+@media (max-width: 720px) { .xrow { grid-template-columns: 1fr; } }

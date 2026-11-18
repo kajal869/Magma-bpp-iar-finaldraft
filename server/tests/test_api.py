@@ -47,7 +47,8 @@ def test_analyze_reports_captured_and_missing(files):
     r = analyze(files["slip"], files["quote"])
     assert r.status_code == 200
     d = r.json()
-    assert {"fields", "addons", "sections", "terms", "groups", "warnings"} <= set(d)
+    assert {"fields", "addons", "sections", "terms", "groups", "warnings", "crossChecks"} <= set(d)
+    assert all(x["agree"] for x in d["crossChecks"]) and {x["label"] for x in d["crossChecks"]} <= {"Insured name", "Insured address"}
     assert [x["no"] for x in d["sections"] if x["opted"]] == [1, 3, 7]
     by = {f["key"]: f for f in d["fields"]}
     assert by["insured.name"]["status"] == "ok" and by["insured.name"]["source"] == "Closing slip"

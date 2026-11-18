@@ -2,6 +2,8 @@
 
   python -m extractor.regress              compare with extractor/baseline.local.json (exit 1 on a regression)
   python -m extractor.regress --update     accept the current numbers as the new baseline
+  python -m extractor.regress --profiles   use the learned layout profiles of this machine (default: blind, an empty profile folder, so a result
+                                           never depends on layouts taught earlier from these same files)
   python -m extractor.regress apa pune     only these cases
 
 Per case (inputs and optional expectations live in the private extractor/cases.local.json):
@@ -9,6 +11,8 @@ Per case (inputs and optional expectations live in the private extractor/cases.l
   money          premium.net / premium.final against `expect` (net_premium, total_premium) when given: correct / flagged / SILENT_WRONG
   sections       layout, whether the section premiums tie to the net premium, how many sections are ok / check
   addons         rows, keep/drop/pending, auto-eligible, and UNFLAGGED kept rows (invariant: 0)
+  quote          optional `expect.quote` = {"sections": {"1": [si, premium]}, "hypothecation": [...], "business_activity": "...", "terms": {"deductibles": true,
+                 "conditions": true}}: each item correct / flagged / SILENT_WRONG / missing, the same bar as the money checks
 Where a full answer-key case exists (app/cases/<case>.json) the field and section scorers run too.
 
 Regression = a new crash, more SILENT_WRONG, any UNFLAGGED row, or fewer correct values than the baseline. The baseline holds counts only
@@ -51,6 +55,50 @@ def money_checks(fields: dict, expect: dict) -> dict:
     return out
 
 
+def _alnum(x) -> str:
+    import re
+    return re.sub(r"[^A-Z0-9]", "", str(x or "").upper())
+
+
+def quote_checks(res: dict, expect: dict) -> dict:
+    """The quote side: per-section sum insured / premium, hypothecation, business activity, presence of terms."""
+    out = {"correct": 0, "flagged": 0, "SILENT_WRONG": 0, "missing": 0, "detail": {}}
+
+    def put(key, verdict, got, exp):
+        out[verdict] += 1
+        out["detail"][key] = (verdict, got, exp)
+
+    sec = (res.get("sections") or {}).get("sections") or {}
+    for n, (esi, epr) in (expect.get("sections") or {}).items():
+        s = sec.get(int(n)) or sec.get(str(n)) or {}
+        for label, got, exp in (("si", s.get("sum_insured"), esi), ("premium", s.get("premium"), epr)):
+            if exp is None:
+                continue
+            key = f"section {n} {label}"
+            if got in (None, 0):
+                put(key, "missing", got, exp)
+            elif s.get("status") not in SHOWN:
+                put(key, "flagged", got, exp)
+            else:
+                put(key, "correct" if abs(float(got) - float(exp)) <= TOL else "SILENT_WRONG", got, exp)
+    if "hypothecation" in expect:
+        f = next((x for x in res["fields"] if x.field == "hypothecation"), None)
+        got = f.value if f and f.value else []
+        got = got if isinstance(got, list) else [got]
+        ok = sorted(_alnum(x) for x in got) == sorted(_alnum(x) for x in expect["hypothecation"])
+        put("hypothecation", "correct" if ok else ("flagged" if f and f.status not in SHOWN else ("SILENT_WRONG" if got else "missing")), got, expect["hypothecation"])
+    t = ((res.get("sections") or {}).get("terms")) or {}
+    for k, want in (expect.get("terms") or {}).items():
+        have = bool(t.get(k))
+        put(f"terms {k}", "correct" if have == bool(want) else "missing", have, want)
+    if "business_activity" in expect:
+        from .build_case import assemble
+        case, _ = assemble(res)
+        got = case["insured"]["business_activity"]
+        put("business_activity", "correct" if _alnum(got) == _alnum(expect["business_activity"]) else ("missing" if not got else "SILENT_WRONG"), got, expect["business_activity"])
+    return out
+
+
 def run_case(name: str, cfg: dict) -> dict:
     c = cfg[name]
     r: dict = {"case": name, "crash": None}
@@ -64,6 +112,8 @@ def run_case(name: str, cfg: dict) -> dict:
     r["fields"] = {k: x.status for k, x in f.items()}
     r["field_counts"] = {"ok": sum(1 for x in f.values() if x.status in SHOWN), "flagged": sum(1 for x in f.values() if x.status not in SHOWN)}
     r["money"] = money_checks(f, c.get("expect", {}))
+    if (c.get("expect") or {}).get("quote"):
+        r["quote"] = quote_checks(res, c["expect"]["quote"])
     sec = res.get("sections")
     if sec and sec.get("layout"):
         sv = [s for s in sec["sections"].values() if s["status"] != "not_found"]
@@ -91,8 +141,9 @@ def summarise(r: dict) -> dict:
         return {"crash": True}
     m = r["money"]
     k = r.get("key")
-    silent = m["SILENT_WRONG"] + (k["fields"]["SILENT_WRONG"] + k["sections"]["SILENT_WRONG"] if k else 0)
-    correct = m["correct"] + (k["fields"]["correct"] + k["sections"]["correct"] if k else 0)
+    q = r.get("quote") or {"SILENT_WRONG": 0, "correct": 0}
+    silent = m["SILENT_WRONG"] + q["SILENT_WRONG"] + (k["fields"]["SILENT_WRONG"] + k["sections"]["SILENT_WRONG"] if k else 0)
+    correct = m["correct"] + q["correct"] + (k["fields"]["correct"] + k["sections"]["correct"] if k else 0)
     return {"crash": False, "silent_wrong": silent, "correct": correct, "unflagged": r["addons"]["unflagged"], "rows": r["addons"]["rows"]}
 
 
@@ -106,6 +157,12 @@ def show(r: dict) -> None:
           + (f"   variant {r['variant']}" if r["variant"] else ""))
     for k, (v, got, exp) in m["detail"].items():
         print(f"   money {k:14} {v:13} got={got}  expected={exp}")
+    if r.get("quote"):
+        q = r["quote"]
+        print(f"   quote key: correct {q['correct']} flagged {q['flagged']} missing {q['missing']} SILENT_WRONG {q['SILENT_WRONG']}")
+        for k, (v, got, exp) in q["detail"].items():
+            if v != "correct":
+                print(f"      {k:24} {v:13} got={got}  expected={exp}")
     print(f"   sections layout={s['layout']} tie={s['tie']} ok={s['ok']} check={s['check']}")
     print(f"   add-ons rows={a['rows']} keep={a['keep']} drop={a['drop']} pending={a['pending']} auto={a['auto']} UNFLAGGED={a['unflagged']}")
     if r.get("key"):
@@ -118,6 +175,10 @@ def show(r: dict) -> None:
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     update = "--update" in argv
+    if "--profiles" not in argv:                                # blind by default: no layout learned earlier from these same files
+        import tempfile
+        from .layouts import store
+        store.LEARNED = Path(tempfile.mkdtemp(prefix="bpp_blind_"))
     names_arg = [a for a in argv if not a.startswith("--")]
     cfg = load_cases()
     names = names_arg or sorted(n for n in cfg if n != "demo_laghu") + ["demo_laghu"]

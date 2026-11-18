@@ -14,6 +14,7 @@ def run(slip_path: str, quote_path: str, imd_path: str | None = None) -> dict:
     try:
         sf, raw = slip_adapter.read(slip_path, imd_path)
         fields += sf
+        warnings += raw.get("check_warnings", [])
         slip_total = next((f.value for f in sf if f.field == "premium.final" and isinstance(f.value, (int, float))), None)
     except Exception as e:
         warnings.append(f"closing slip could not be read: {type(e).__name__}: {e}")

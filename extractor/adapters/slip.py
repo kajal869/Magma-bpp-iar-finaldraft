@@ -98,4 +98,29 @@ def read(path: str, imd_path: str | None = None) -> tuple[list[Field], dict]:
     except (TypeError, ValueError):
         prem = None
     put("premium.final", prem, note="slip total premium (100%), tie-out anchor")
+    raw["check_warnings"] = slip_checks(raw, prem)
     return out, raw
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def slip_checks(raw: dict, prem: float | None) -> list[str]:
+    """Arithmetic the slip must satisfy by itself. A failure is only a warning: nothing is corrected."""
+    w = []
+    share, ours = _num(raw.get("our_share")), _num(raw.get("our_share_premium"))
+    if share is not None and prem is not None and ours is not None and abs(share * prem - ours) > max(1.0, abs(ours) * 1e-6):
+        w.append(f"closing slip: our share {share:g} x 100% premium {prem:,.2f} = {share * prem:,.2f}, but 'Our Share Premium' says {ours:,.2f}")
+    co = [c for c in (raw.get("co_insurers") or []) if _num(c.get("share")) is not None]
+    if len(co) > 1 and abs(sum(_num(c["share"]) for c in co) - 1) > 1e-6:
+        w.append(f"closing slip: co-insurer shares add up to {sum(_num(c['share']) for c in co):.4g}, not 1")
+    mine = next((c for c in co if str(c.get("name", "")).lower().startswith("magma")), None)
+    if mine is not None and share is not None and abs(_num(mine["share"]) - share) > 1e-6:
+        w.append(f"closing slip: Magma's co-share row says {mine['share']} but 'Our Share' says {share:g}")
+    if str(raw.get("magma_role") or "").lower().startswith("follower") and share == 1:
+        w.append("closing slip: Magma is marked follower but holds a 100% share")
+    return w

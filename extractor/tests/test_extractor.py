@@ -160,3 +160,25 @@ def test_slip_amount_equal_to_net_selects_the_sheet_and_is_derived():
     assert out["premium.final"].value == 496367.0 and out["premium.final"].status == "derived"
     amb = {f.field: f for f in headline._apply_net_tie([Field("premium.net", None, "conflict")], {"fields": {"net_premium": {"evidence": [{"value": 100.0}, {"value": 100.5}]}}}, 100.0)}
     assert amb["premium.net"].status == "conflict"            # two candidates within tolerance of the slip amount: nothing is picked
+
+
+def test_slip_arithmetic_checks():
+    from extractor.adapters.slip import slip_checks
+    good = {"our_share": 0.35, "our_share_premium": 350.0, "co_insurers": [{"name": "Magma", "share": 0.35}, {"name": "UIIC", "share": 0.65}], "magma_role": "Leader"}
+    assert slip_checks(good, 1000.0) == []
+    bad = {"our_share": 0.35, "our_share_premium": 400.0, "co_insurers": [{"name": "Magma", "share": 0.40}, {"name": "UIIC", "share": 0.65}], "magma_role": "Follower"}
+    w = " | ".join(slip_checks(bad, 1000.0))
+    assert "Our Share Premium" in w and "add up" in w and "co-share row says 0.4" in w
+    assert "follower but holds a 100%" in " | ".join(slip_checks({"our_share": 1, "magma_role": "Follower"}, None))
+
+
+def test_quote_side_regression_checks():
+    from extractor.envelope import Field
+    from extractor.regress import quote_checks
+    sec = {1: {"sum_insured": 100.0, "premium": 10.0, "status": "ok"}, 3: {"sum_insured": 50.0, "premium": 4.0, "status": "check"}, 8: {"sum_insured": None, "premium": None, "status": "not_found"}}
+    res = {"sections": {"sections": sec, "terms": {"deductibles": {1: ["x"]}, "conditions": {}}}, "fields": [Field("hypothecation", ["Axis Bank"], "ok")]}
+    out = quote_checks(res, {"sections": {"1": [100, 15.0], "3": [50, 4], "8": [1, 1]}, "hypothecation": ["AXIS BANK"], "terms": {"deductibles": True, "conditions": True}})
+    d = {k: v[0] for k, v in out["detail"].items()}
+    assert d["section 1 si"] == "correct" and d["section 1 premium"] == "SILENT_WRONG"       # shown as ok but different from the key
+    assert d["section 3 premium"] == "flagged" and d["section 8 si"] == "missing"
+    assert d["hypothecation"] == "correct" and d["terms deductibles"] == "correct" and d["terms conditions"] == "missing"

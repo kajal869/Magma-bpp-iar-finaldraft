@@ -97,6 +97,14 @@ export interface AnalyzeResult {
   groups: string[];
   warnings: string[];
   notes: string[];
+  crossChecks?: CrossCheck[];
+}
+
+export interface CrossCheck {
+  label: string;
+  slip: string;
+  quote: string;
+  agree: boolean;
 }
 
 export interface Blank {
