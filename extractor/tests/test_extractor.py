@@ -182,3 +182,12 @@ def test_quote_side_regression_checks():
     assert d["section 1 si"] == "correct" and d["section 1 premium"] == "SILENT_WRONG"       # shown as ok but different from the key
     assert d["section 3 premium"] == "flagged" and d["section 8 si"] == "missing"
     assert d["hypothecation"] == "correct" and d["terms deductibles"] == "correct" and d["terms conditions"] == "missing"
+
+
+def test_wording_id_slug_rule_and_kept_clause_ids():
+    from extractor.build_case import clause_ids
+    from extractor.clausebank.make_wording_ids import slug
+    assert slug("Earthquake (to be deleted if Earthquake is not opted for)") == "earthquake-to-be-deleted-if-earthquake-is-not-opted-for"
+    assert slug("Architects, Surveyors and Consulting Engineer’s Fees (in excess of 3% of the claim amount)") == "architects-surveyors-and-consulting-engineers-fees-in-excess-of-3-of-t"
+    rows = [{"decision": "keep", "wording_id": "b"}, {"decision": "drop", "wording_id": "x"}, {"decision": "keep", "wording_id": None}, {"decision": "keep", "wording_id": "a"}, {"decision": "keep", "wording_id": "b"}]
+    assert clause_ids(rows) == ["a", "b"] and clause_ids(None) == []

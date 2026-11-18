@@ -311,6 +311,7 @@ def _apply_edits(sess: dict, req: RenderRequest):
                 extra_blank.append({"key": f"addon:{e.id if e.id is not None else 'new'}", "label": f"Add-on cover: {e.name or src.get('name', '')}".strip(), "group": "Add-on covers"})
     if sec:
         case["annexures"], _ = build_case.annexures_for({"addons": rows, "slip": res.get("slip")}, sec, case)
+        case["options"]["clause_wording_ids"] = build_case.clause_ids(rows)
     return case, extra_blank
 
 

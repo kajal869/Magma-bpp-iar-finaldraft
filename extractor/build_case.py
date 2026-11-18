@@ -65,6 +65,11 @@ def _contact(slip: dict, key: str) -> str:
     return str(rec.get("email") or "")
 
 
+def clause_ids(rows) -> list[str]:
+    """Wording-library ids of the add-on clauses that are kept (never copied from the template case, which belongs to another insured)."""
+    return sorted({r["wording_id"] for r in rows or [] if r.get("decision") == "keep" and r.get("wording_id")})
+
+
 def _lines(v) -> list[str]:
     if isinstance(v, list):
         return v
@@ -128,6 +133,7 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     case["terms"] = sec_mod.term_groups(sec["terms"])
     annex, unbuilt = annexures_for(res, sec, case)
     case["annexures"] = annex
+    case["options"]["clause_wording_ids"] = clause_ids(res.get("addons"))
     notes += [f"not built: {u}" for u in unbuilt]
     case["options"]["show_signature"] = signature_available(case["presentation"]["theme"])
     if not case["options"]["show_signature"]:

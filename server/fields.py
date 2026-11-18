@@ -145,7 +145,15 @@ def build_fields(case: dict, env: dict, suggest: dict | None = None, values: dic
             else:
                 status, source, note = "missing", "Not in the IMD master", "The broker's contact is taken from the IMD master; no record or no value for this broker."
         elif key == "premium.basic":
-            status, source, note = "check", "Net premium (derived)", "Terrorism part of the premium is not in the files; basic = net, terrorism = 0"
+            terr, opted = env.get("premium.terrorism"), env.get("terrorism.opted")
+            if terr is not None and terr.value not in (None, "") and terr.status in ("ok", "derived"):
+                source = "Net premium less the terrorism premium"
+            elif opted is not None and opted.value == "No":
+                source = "Net premium (terrorism not opted on the slip)"
+            elif opted is not None and opted.value == "Yes":
+                status, source, note = "check", "Net premium (derived)", "Terrorism is opted on the slip but its premium was not found on the quote; basic = net, terrorism = 0"
+            else:
+                status, source, note = "check", "Net premium (derived)", "The slip does not say whether terrorism is opted; basic = net, terrorism = 0"
         elif key == "hypothecation":
             if not value.strip():
                 status, source = "missing", "No financial interest on the quote"

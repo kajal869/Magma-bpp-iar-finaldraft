@@ -44,6 +44,10 @@ def run(slip_path: str, quote_path: str, imd_path: str | None = None) -> dict:
         sec = None
         warnings.append(f"sections could not be read: {type(e).__name__}: {e}")
     resolved = _extras(_from_sections(resolved, sec, slip_total), sec)
+    opted = str(raw.get("terrorism_opted") or "").strip().lower()
+    if opted in ("yes", "no"):            # the slip's own statement; it decides whether "no terrorism premium found" is expected
+        from .envelope import Field
+        resolved.append(Field("terrorism.opted", opted.capitalize(), "ok", {"tool": "slip", "sheet": "Closing Slip", "cell": None, "method": "label"}))
     return {"fields": resolved, "addons": rows, "sections": sec, "slip": raw, "warnings": warnings, "variant": info.get("variant"), "cross_checks": cross}
 
 
