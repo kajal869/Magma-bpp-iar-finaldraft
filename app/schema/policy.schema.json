@@ -256,7 +256,7 @@
             "heading": {"type": ["string", "null"]},
             "columns": {"type": "array", "items": {"type": "string"}},
             "rows": {"type": "array", "items": {"type": "object", "required": ["sr", "desc", "value"], "additionalProperties": false,
-              "properties": {"sr": {"type": ["integer", "null"]}, "desc": {"type": "string"}, "value": {"type": ["string", "number", "null"], "description": "Number = sum insured; string = limit/remark text."}, "wording_id": {"type": ["string", "null"], "description": "Wording Library id (Phase 2)."}}}}
+              "properties": {"sr": {"type": ["integer", "null"]}, "desc": {"type": "string"}, "value": {"type": ["string", "number", "null"], "description": "Number = sum insured; string = limit/remark text."}, "wording_id": {"type": ["string", "null"], "description": "Wording Library id (Phase 2)."}, "deductible": {"type": ["string", "null"], "description": "Deductible text for this cover (printed in a Deductible column)."}}}}
           }
         },
         {

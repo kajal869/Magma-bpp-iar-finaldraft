@@ -87,7 +87,7 @@
   {%- endif %}
 
   <div class="bar">Policy Details</div>
-  {{ kv([["Risk Location Address (es)", pr.policy_details_text, False], ["Occupancy (ies)", pr.policy_details_text, False], ["Sum Insured", pr.policy_details_text, False]]) }}
+  {{ kv([["Risk Location Address (es)", pr.policy_details_address or pr.policy_details_text, False], ["Occupancy (ies)", pr.policy_details_occupancy or pr.policy_details_text, False], ["Sum Insured", pr.policy_details_text, False]]) }}
 
   <table class="sec-table">
     <thead><tr><th>Section</th><th>Coverage</th><th class="r">Sum Insured<br>(in INR )</th><th class="r">Premium<br>(in INR)</th></tr></thead>
@@ -206,7 +206,7 @@
   {%- if b.heading %}<div class="heading">{{ b.heading }}</div>{% endif %}
   <table class="at addons{{ ' keep' if b.rows|length <= 10 else '' }}">
     <thead><tr>{% for c in (b.columns or []) %}<th{{ ' class="srn"'|safe if loop.first and b.rows[0].sr is not none else "" }}>{{ c }}</th>{% endfor %}</tr></thead>
-    {%- for r in b.rows %}<tr>{% if r.sr is not none %}<td class="srn">{{ r.sr }}</td>{% endif %}<td>{{ r.desc }}</td><td>{{ cell(r.value) }}</td></tr>{% endfor %}
+    {%- for r in b.rows %}<tr>{% if r.sr is not none %}<td class="srn">{{ r.sr }}</td>{% endif %}<td>{{ r.desc }}</td><td>{{ cell(r.value) }}</td>{% if b.columns|length > 3 %}<td>{{ r.deductible or "" }}</td>{% endif %}</tr>{% endfor %}
   </table>
   </div>
   {%- elif b.type == "matrix" %}
