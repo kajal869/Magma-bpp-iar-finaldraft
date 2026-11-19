@@ -164,3 +164,25 @@ def test_matrix_layout_builds_one_annexure_per_opted_section():
     assert ann[1]["header"]["risk_location"] == "B" and ann[5]["header"]["risk_location"] == "A"       # single-location sections name their location
     assert ann[0]["blocks"][1]["type"] == "matrix" and ann[0]["blocks"][1]["total"]["total"] == 150.0
     assert ann[2]["blocks"][1]["total"]["total"] == 140.0                                          # burglary = fire items without the building
+
+
+def test_addon_deductible_column_separates_deductible_from_limit():
+    terms = {"deductibles": {5: ["Escalation – Policy Excess", "Third Party Liability – 1% of the TPL limits selected"]}}
+    blocks = [{"type": "addons", "columns": annexures.ADDON_COLUMNS, "rows": [
+        {"sr": 1, "desc": "Electrical Breakdown", "value": "Covered", "wording_id": None},
+        {"sr": 2, "desc": "Escalation", "value": "Covered", "wording_id": None},
+        {"sr": 3, "desc": "Third Party Liability @ 10%", "value": "Covered", "wording_id": None}]}]
+    annexures._attach_deductibles(blocks, terms, 5, 134960)
+    b = blocks[0]
+    assert b["columns"][-1] == "Deductible"
+    assert [r["deductible"] for r in b["rows"]] == [None, "Policy Excess", "1% of the TPL limits selected"]
+    assert [r["value"] for r in b["rows"]] == ["Covered", "Covered", 13496]       # 10% of the section sum insured; the deductible never lands in this column
+
+
+def test_theft_rsmd_covered_up_to_section_si_only_without_first_loss():
+    terms = {"conditions": {3: ["Theft and RSMD Covered"]}}
+    rows = [r for b in annexures._addon_blocks([], 3, terms, 560_000_000) for r in b["rows"]]
+    assert {r["desc"]: r["value"] for r in rows} == {"Theft": 560_000_000.0, "RSMD": 560_000_000.0}
+    terms["conditions"][3].append("First Loss Basis @ 25%")
+    rows = [r for b in annexures._addon_blocks([], 3, terms, 560_000_000) for r in b["rows"]]
+    assert {r["value"] for r in rows} == {"Covered"}

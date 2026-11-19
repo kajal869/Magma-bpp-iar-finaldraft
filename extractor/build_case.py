@@ -110,14 +110,14 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     terr = val("premium.terrorism", None)
     terr = float(terr) if isinstance(terr, (int, float)) else 0
     case["premium"] = {"basic": (net - terr) if net is not None else 0, "terrorism": terr, "net": net if net is not None else 0,
-                       "taxes": [{"type": "IGST", "rate": 0.18, "amount": gst}], "final": final if final is not None else 0}
+                       "taxes": [{"type": "IGST", "rate": 0.0 if (abs(gst) < 0.5 and net is not None and final is not None) else 0.18, "amount": gst}], "final": final if final is not None else 0}
     if sec["layout"] == "matrix" and net is not None and final is not None:
         # whole-rupee summary like the issued policies of this layout: net / basic / final cut to the rupee, terrorism = the difference, tax = the difference
         import math
         n0, b0, f0 = math.floor(net + 1e-9), math.floor(net - terr + 1e-9), math.floor(final + 1e-9)
         case["premium"] = {"basic": b0, "terrorism": n0 - b0, "net": n0, "taxes": [{"type": "IGST", "rate": 0.18, "amount": f0 - n0}], "final": f0}
         case["presentation"]["premium_summary_decimals"] = 0
-    notes.append("tax split (IGST vs CGST+SGST) is not decided by the files; placeholder IGST 18%" + ("" if "premium.terrorism" in f else "; the terrorism part of the premium was not found (0)"))
+    notes.append("tax split (IGST vs CGST+SGST) is not decided by the files; " + ("no GST in the premium: IGST 0%" if abs(gst) < 0.5 and net is not None and final is not None else "placeholder IGST 18%") + ("" if "premium.terrorism" in f else "; the terrorism part of the premium was not found (0)"))
     share = slip.get("our_share")
     case["coinsurance"] = ([{"insurer": c["name"], "share_pct": c["share"] * 100 if c["share"] <= 1 else c["share"]} for c in (slip.get("co_insurers") or [])]
                            or ([{"insurer": "Magma General Insurance Limited", "share_pct": share * 100 if share and share <= 1 else (share or 100)}]))
@@ -147,6 +147,12 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     case["terms"] = sec_mod.term_groups(sec["terms"])
     annex, unbuilt = annexures_for(res, sec, case)
     case["annexures"] = annex
+    # one risk location across every annexure: the schedule prints its address and occupancy instead of "as per annexure"
+    hdrs = [a.get("header") or {} for a in annex]
+    locs = {" ".join(str(h.get("risk_location") or "").split()) for h in hdrs}
+    occs = {" ".join(str(h.get("occupancy") or "").split()) for h in hdrs}
+    if hdrs and len(locs) == 1 and len(occs) == 1 and all(locs | occs) and not any(re.match(r"as per", x, re.I) for x in locs | occs):
+        case["presentation"]["policy_details_address"], case["presentation"]["policy_details_occupancy"] = locs.pop(), occs.pop()
     case["options"]["clause_wording_ids"] = clause_ids(res.get("addons"))
     notes += [f"not built: {u}" for u in unbuilt]
     case["options"]["show_signature"] = signature_available(case["presentation"]["theme"])
