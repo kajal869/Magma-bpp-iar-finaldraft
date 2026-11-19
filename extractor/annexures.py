@@ -155,15 +155,61 @@ def _covered_pairs(terms: dict, existing: set) -> list[dict]:
     return rows
 
 
-def _addon_blocks(addons: list[dict], n: int, terms: dict) -> list[dict]:
+def _norm_label(s: str) -> list[str]:
+    s = re.sub(r"@\s*\d+(?:\.\d+)?\s*%", " ", str(s).lower().replace("\u2019", "'"))
+    s = re.sub(r"'s\b", "", s)
+    return [w for w in re.findall(r"[a-z]+", s) if w not in ("of", "the", "and")]
+
+
+def _ded_pairs(lines: list[str]) -> list[tuple[list[str], str]]:
+    """Deductible lines of the form 'Escalation – Policy Excess' -> (label words, text)."""
+    out = []
+    for l in lines:
+        m = re.match(r"^\s*([^–—:]+?)\s*[–—:]\s*(.+)$", l) or re.match(r"^\s*([^-]+?)\s+-\s+(.+)$", l)
+        if m and len(_norm_label(m.group(1))) >= 1:
+            out.append((_norm_label(m.group(1)), m.group(2).strip()))
+    return out
+
+
+def _attach_deductibles(blocks: list[dict], terms: dict, n: int, total) -> None:
+    """An add-on that the section's excess table also prices ('Escalation – Policy Excess', 'Third Party Liability – 1% of the TPL limits') gets its own
+    Deductible column, so the sum insured / limit column never carries deductible text. '@ N%' covers state their limit as N% of the section sum insured."""
+    pairs = _ded_pairs((terms.get("deductibles") or {}).get(n, []))
+    if not pairs:
+        return
+    for b in blocks:
+        if b.get("type") != "addons":
+            continue
+        hit = 0
+        for r in b["rows"]:
+            w = _norm_label(r["desc"])
+            for lab, txt in pairs:
+                if w and lab and (set(w) <= set(lab) or set(lab) <= set(w)):
+                    r["deductible"] = txt
+                    hit += 1
+                    break
+        if hit:
+            for r in b["rows"]:
+                m = re.search(r"@\s*(\d+(?:\.\d+)?)\s*%", r["desc"])
+                if m and total and isinstance(r["value"], str) and r["value"].strip().lower() == "covered":
+                    r["value"] = round(float(total) * float(m.group(1)) / 100)
+                r.setdefault("deductible", None)
+            b["columns"] = ADDON_COLUMNS + ["Deductible"]
+
+
+def _addon_blocks(addons: list[dict], n: int, terms: dict, total=None) -> list[dict]:
     blocks = section_addon_blocks(addons, n)
     if n == 3:
         have = {str(r["desc"]).lower() for b in blocks for r in b["rows"]}
         extra = _covered_pairs(terms, have)
+        for e in extra:      # "Theft and RSMD Covered" with no separate limit and no first-loss % in the quote: covered up to the section sum insured
+            if total and not _first_loss(terms, total) and str(e["remark"]).strip().lower() == "covered":
+                e["limit"] = str(int(total))
         if extra and blocks:
-            blocks[0]["rows"] += [{"sr": len(blocks[0]["rows"]) + i + 1, "desc": e["name"], "value": e["remark"], "wording_id": None} for i, e in enumerate(extra)]
+            blocks[0]["rows"] += [{"sr": len(blocks[0]["rows"]) + i + 1, "desc": e["name"], "value": float(e["limit"]) if e.get("limit") else e["remark"], "wording_id": None} for i, e in enumerate(extra)]
         elif extra:
             blocks.append(addon_block(extra, "Add on Covers"))
+    _attach_deductibles(blocks, terms, n, total)
     return blocks
 
 
@@ -274,7 +320,7 @@ def _other(sec: dict, n: int, s: dict, addons: list[dict]):
                         for a in b["addons"]:
                             seen.setdefault(re.sub(r"\s*cover$", "", a["name"], flags=re.I).strip().upper() if a["name"].upper().startswith("RSMD") else re.sub(r"\s*cover$", "", a["name"], flags=re.I).strip(), a["remark"] or "Covered")
                     if seen:
-                        have = {str(r["desc"]).lower() for blk in _addon_blocks(addons, n, terms) for r in blk["rows"]}
+                        have = {str(r["desc"]).lower() for blk in _addon_blocks(addons, n, terms, total) for r in blk["rows"]}
                         rows = [{"sr": i + 1, "desc": k, "value": v, "wording_id": None} for i, (k, v) in enumerate(seen.items()) if k.lower() not in have]
                         if rows:
                             blocks.append({"type": "addons", "heading": "Add on Covers", "columns": ADDON_COLUMNS, "rows": rows})
@@ -306,5 +352,6 @@ def _other(sec: dict, n: int, s: dict, addons: list[dict]):
     if not built and total:
         blocks.append(_simple([{"desc": s.get("desc") or PLAIN_DESC.get(n, s["label"]), "si": total}], total))
         notes.append(f"annexure {n}: no item breakdown that ties to the sum insured was found in the quote; the section total is printed alone")
-    blocks += _addon_blocks(addons, n, terms)
+    flb = any(b.get("type") == "note" and str(b.get("text", "")).startswith("First Loss") for b in blocks)      # a stated first-loss % keeps Theft / RSMD at "Covered"
+    blocks += _addon_blocks(addons, n, terms, None if flb else total)
     return blocks, over, notes

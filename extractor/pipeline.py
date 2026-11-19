@@ -87,7 +87,13 @@ def _from_sections(fields: list, sec: dict | None, slip_total: float | None) -> 
         out.append(Field("premium.net", sec["net"], "derived", src, note="net premium stated on the verified section table (section premiums add up to it)"))
     gross = sec.get("gross")
     fin = get("premium.final")
-    if gross and abs(gross - sec["net"] * 1.18) <= 2 and fin is not None and fin.status not in SHOWN and slip_total is not None and abs(slip_total - sec["net"]) <= 1:
+    import re as _re
+    sez = any(isinstance(f.value, str) and _re.search(r"\bSEZ\b|special economic zone|\bMEPZ\b", f.value, _re.I) for f in out if f.field in ("insured.address", "insured.name") or "address" in f.field)
+    if sez and slip_total is not None and abs(slip_total - sec["net"]) <= 1 and (fin is None or fin.status not in SHOWN):
+        out = [f for f in out if f.field != "premium.final"]       # supply to an SEZ unit is zero-rated: the slip's "premium incl. GST" equals the net premium
+        out.append(Field("premium.final", slip_total, "derived", {**src, "method": "closing slip"},
+                         note="insured is in an SEZ and the closing slip's premium including GST equals the net premium: zero-rated supply (IGST 0%)"))
+    elif gross and abs(gross - sec["net"] * 1.18) <= 2 and fin is not None and fin.status not in SHOWN and slip_total is not None and abs(slip_total - sec["net"]) <= 1:
         out = [f for f in out if f.field != "premium.final"]
         out.append(Field("premium.final", gross, "derived", {**src, "method": "section table"},
                          note="the closing slip amount equals the quote's net premium (it excludes GST); total taken from the quote's premium incl. GST"))
