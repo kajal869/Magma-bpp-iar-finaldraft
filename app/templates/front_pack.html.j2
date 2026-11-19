@@ -129,11 +129,13 @@
     <thead><tr><th class="c" style="width:14%">Sl. No.</th><th class="c">{{ "Insurer" if pr.theme == "laghu" else "Name of the Insurer" }}</th><th class="c" style="width:18%">Share (%)</th></tr></thead>
     {%- for c in d.coinsurance %}<tr><td>{{ loop.index }}</td><td{{ ' class="c"'|safe if pr.theme == "laghu" else "" }}>{{ c.insurer }}</td><td{{ ' class="c"'|safe if pr.theme == "laghu" else "" }}>{{ c.share_pct|int }}</td></tr>{% endfor %}
   </table>
+  {%- if d.hypothecation %}
   <div class="sum-bar">HYPOTHECATION DETAILS</div>
   <table class="grid hyp">
     <thead><tr><th style="width:14%">Sl. No.</th><th>Name of the Financier</th></tr></thead>
     {%- for h in d.hypothecation %}<tr><td>{{ loop.index }}</td><td class="nm">{{ h }}</td></tr>{% endfor %}
   </table>
+  {%- endif %}
 </section>
 
 {#- ================= 5. GST / invoice block ================= #}

@@ -38,7 +38,7 @@ F = [
     ("premium.basic", "Basic premium (INR)", "Premium", "premium.basic", "money", False, True, None),
     ("premium.net", "Net premium (INR)", "Premium", "premium.net", "money", False, True, None),
     ("premium.final", "Final premium incl. tax (INR)", "Premium", "premium.final", "money", False, True, "premium"),
-    ("hypothecation", "Hypothecation (financier)", "Other", "hypothecation", "lines", False, True, None),
+    ("hypothecation", "Hypothecation (financier)", "Other", "hypothecation", "lines", False, False, None),
 ]
 BY_KEY = {f[0]: f for f in F}
 # UI key -> extractor envelope field
@@ -156,7 +156,7 @@ def build_fields(case: dict, env: dict, suggest: dict | None = None, values: dic
                 status, source, note = "check", "Net premium (derived)", "The slip does not say whether terrorism is opted; basic = net, terrorism = 0"
         elif key == "hypothecation":
             if not value.strip():
-                status, source = "missing", "No financial interest on the quote"
+                status, source = "missing", "No financial interest in the files; the Hypothecation Details block is left out of the draft"
             else:
                 source = "Quote (financial interest)"
         elif key == "system.sac_code":

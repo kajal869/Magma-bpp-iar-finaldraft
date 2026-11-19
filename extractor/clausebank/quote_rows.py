@@ -11,11 +11,13 @@ import warnings
 from pathlib import Path
 
 from .remarks import classify
+from ..legacy.grid import hidden_axes
 
 warnings.filterwarnings("ignore")
 
 TABLE_ANCHOR = re.compile(r"^\s*(?:cover\s+required|add[\s\-]*ons?(?:\s+covers?)?|add[\s\-]*on\s+covers?|additional\s+clauses.*|add[\s\-]*on\s+covers?\s*(?:&|and)\s*clauses)\s*:?\s*$", re.I)
 LIST_ANCHOR = re.compile(r"^\s*(?:conditions?\s*[,/]?\s*warranties.*|terms\s*/\s*conditions\s*/?\s*clauses?|conditions\s+applicable\s+to\s+all.*|special\s+conditions.*)\s*:?\s*$", re.I)
+MAGMA_HDR = re.compile(r"^\s*magma\s+(?:terms?|remarks?)\s*:?\s*$", re.I)
 HEADER_NAME = re.compile(r"^\s*(?:covers?|coverages?|clauses?|particulars)\s*:?\s*$", re.I)
 REMARK_HDR = re.compile(r"remark|insurer\s*terms?|status|magma|response|comment", re.I)
 LIMIT_HDR = re.compile(r"limit|sum\s*insured|\bsi\b", re.I)
@@ -62,8 +64,11 @@ def sheets(path):
     wb = openpyxl.load_workbook(str(path), data_only=True)
     for ws in wb.worksheets:
         g = {}
+        hrows, hcols = hidden_axes(ws)
         for row in ws.iter_rows():
-            cells = {c.column: c.value for c in row if c.value is not None and str(c.value).strip() != ""}
+            if row[0].row in hrows:
+                continue
+            cells = {c.column: c.value for c in row if c.column not in hcols and c.value is not None and str(c.value).strip() != ""}
             if cells:
                 g[row[0].row] = cells
         out.append((ws.title, ws.sheet_state != "visible", g))
@@ -105,9 +110,10 @@ def _table_block(g, r0, namecol):
             cand = [(c, _txt(v)) for c, v in sorted(right.items()) if isinstance(v, str) and v.strip() and not _is_num(v)]
             remark = cand[-1][1] if cand else ""
             remark_col_row = cand[-1][0] if cand else None
-        if remark_col is None and remark:
+        rcol = remark_col if remark_col is not None else (remark_col_row if remark else None)
+        if rcol is not None:                          # the cells between the cover name and the remark (a headerless sum-insured / limit column)
             limit_cells = [_txt(v) if isinstance(v, str) else str(int(v) if isinstance(v, float) and float(v).is_integer() else v)
-                           for c, v in sorted(right.items()) if c < remark_col_row]
+                           for c, v in sorted(right.items()) if c < rcol]
         else:
             limit_cells = []
         if limit_col is not None:
@@ -142,12 +148,27 @@ def _list_block(g, r0, namecol):
 SECTION_HEADS = [(re.compile(r"burglary|house\s*breaking", re.I), 3), (re.compile(r"money\s+(?:insurance|cover)|cash\s+(?:insurance|cover)", re.I), 7),
                  (re.compile(r"machinery\s+breakdown|\bmbd\b", re.I), 4), (re.compile(r"electronic\s+equipment\s+(?:insurance|cover)", re.I), 5),
                  (re.compile(r"loss\s+of\s+profit|\bflop\b", re.I), 2), (re.compile(r"fire\s*&|special\s+perils|\bsfsp\b|fire\s+insurance", re.I), 1)]
+# a lone title-case label directly above an "Add Ons" anchor ("FLOP For SFSP policies", "Burglary For SFSP policies", "EEI", "Money") names the section too
+LABEL_HEADS = SECTION_HEADS[:-1] + [(re.compile(r"^\s*(?:eei|electronic\s+equipment.*)\s*$", re.I), 5), (re.compile(r"^\s*(?:all\s+risks?(?:\s+cover)?\b.*)$", re.I), 9),
+                                     (re.compile(r"^\s*(?:money|cash)(?:\s*/\s*cash)?\s*$", re.I), 7), (re.compile(r"^\s*fidelity\b.*$", re.I), 8),
+                                     (re.compile(r"^\s*(?:mbd|machinery\s+breakdown.*)$", re.I), 4), (re.compile(r"^\s*(?:fire|sfsp).*\bpolic", re.I), 1)]
 # deliberately narrow: only a heading that names a cover moves a table to another section; item rows such as "Plant & Machinery" must not
 
 
 def block_section(g, r0, span=15):
     """Policy section a table belongs to: the nearest ALL-CAPS heading within 15 rows above the anchor that names a cover (default 1).
     Title-case labels (column headers, item names) never move a table, so mixed layouts fall back to section 1 and are reviewed."""
+    for rr in range(r0 - 1, max(0, r0 - 30), -1):         # the nearest label above the anchor, alone on its row, with no other table in between
+        row = g.get(rr, {})
+        texts = [_txt(v) for v in row.values()]
+        if any(TABLE_ANCHOR.match(t) for t in texts if t):
+            break
+        if len(row) == 1:
+            t = texts[0]
+            if t and len(t) < 60:
+                hit = next((n for rx, n in LABEL_HEADS if rx.search(t)), None)
+                if hit:
+                    return hit
     for rr in range(r0 - 1, max(0, r0 - span), -1):
         for v in g.get(rr, {}).values():
             t = _txt(v)
@@ -168,6 +189,18 @@ def extract(case, path):
                 name = _txt(v)
                 is_hdr = bool(name) and HEADER_NAME.match(name) and any(
                     isinstance(v2, str) and REMARK_HDR.search(v2) and len(v2) < 40 for c2, v2 in g[r].items() if c2 != c)
+                is_magma_hdr = bool(name) and MAGMA_HDR.match(name) and len(g[r]) <= 2          # a bare "Magma Terms" column header over a list of covers
+                if is_magma_hdr:
+                    nxt = g.get(r + 1, {})
+                    cols = [c2 for c2, v2 in sorted(nxt.items()) if isinstance(v2, str) and v2.strip() and not _is_num(v2) and c2 < c]
+                    if not cols:
+                        continue
+                    blk = _table_block(g, r, cols[0])
+                    if blk:
+                        has_table = True
+                        for b in blk:
+                            out.append({**b, "case": case, "sheet": sheet, "hidden": hidden, "block": r, "row_type": "addon_row", "section": block_section(g, r)})
+                    continue
                 if name and len(name) < 70 and (TABLE_ANCHOR.match(name) or is_hdr):
                     # a table anchor must have rows with something to its right or a remark header, else it is a label
                     blk = _table_block(g, r, c)

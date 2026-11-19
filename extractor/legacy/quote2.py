@@ -153,6 +153,9 @@ def _terms_broad(sh):
             continue
         if not on:
             continue
+        if ALL_BLOCK.match(text.strip()):                  # the closing "Ø" block of general clauses
+            res["conditions"]["all"].append(re.sub(r"^[Ø➢•\s]+", "", text).strip())
+            continue
         t = re.sub(r"^[øø•➢\-\s]+", "", t)
         text = re.sub(r"^[Ø➢•\s]+", "", text)
         m = re.search(r"quote date\s*[:\-]?\s*(.+)", t)
@@ -238,7 +241,8 @@ def parse_matrix(sheets, hint=None):
         if addr_c in r and isinstance(r[addr_c], str) and any(is_num(r.get(c)) for c, _ in si_cols):
             items = [{"description": head_names[c], "si": r[c]} for c, _ in si_cols if is_num(r.get(c)) and r[c]]
             q["locations"].append({"sheet": summ.name, "address": re.sub(r"\s+", " ", r[addr_c]), "occupancy": re.sub(r"\s+", " ", str(r.get(occ_c) or "")),
-                                   "fire_items": items, "fire_total": r.get(col("fire si", "tsi")), "burglary_items": [], "burglary_total": None, "addons": []})
+                                   "fire_items": items, "fire_total": r.get(col("fire si", "tsi")), "burglary_items": [], "burglary_total": None, "addons": [],
+                                   "cols": {norm(head_names[c]): r[c] for c in r if c in head_names and is_num(r[c])}})
     net = prem.get("total premium incl addon")
     q["premium_summary"] = {"net_premium": net, "gst": (net or 0) * 0.18, "total_premium": (net or 0) * 1.18}
     # the policy's 'Terrorism' line bundles terrorism + FLOP terrorism + add-on premium; 'Basic' is the rest (seen on the Valmet policy)
@@ -264,14 +268,25 @@ def _covers_rfq(sh):
 
 
 # ------------------------------------------------------------------ per-section terms
+ALL_BLOCK = re.compile(r"^[Ø➢•]\s*\S")          # the quote's closing block of general clauses is bulleted with "Ø" (Communicable Disease / Sanctions / Cyber Loss)
+H_SECTION = re.compile(r"^section\s*[–-]\s*(\d+)")
+H_DED = re.compile(r"^(excess/)?deductibles?:?$|^excess:?$")
+H_COND = re.compile(r"^(coverages?\s*/\s*clauses(\s*/\s*warranties)?|terms/conditions\s*/?\s*clause|terms and conditions\s*/\s*warranties|conditi+ons?\s*/\s*warranties(\s*/\s*clauses)?|coverage:?$)")
+ASSET_REG = re.compile(r"asset register|(list|description)s? of (equipments?|items).*(provided|annexure)", re.I)
+
+
 def terms_by_section(sh):
-    """Conditions and excess lines per section number, from 'Section - N' headings in a Terms and Conditions block."""
-    cond, ded, allc = {}, {}, []
-    on, sec, state = False, None, None
+    """Conditions and excess lines per section number, from 'Section - N' headings in a Terms and Conditions block.
+    Also: the closing "Ø" block -> conditions applicable to all sections; "Excess:" key/value rows keep their value; a 'Table of ... excess'
+    block is returned as a table; sections whose equipment/item list is 'to be provided as annexure' (or that mention an asset register) are flagged
+    in `asset_register` so the Asset Register Warranty can be printed for them."""
+    cond, ded, allc, tables, asset = {}, {}, [], {}, set()
+    on, sec, state, tbl = False, None, None, None
     for _, cells in sh.rows:
-        c0, text = cells[0]
-        if not isinstance(text, str):
+        texts = [(c, v) for c, v in cells if isinstance(v, str) and v.strip()]
+        if not texts:
             continue
+        c0, text = texts[0]
         raw = re.sub(r"^[Ø➢•\s]+", "", text).strip()
         t = norm(raw)
         if re.match(r"^terms and conditions", t):
@@ -281,19 +296,39 @@ def terms_by_section(sh):
             continue
         if re.match(r"^terms, conditions, and capacity|^quotation vali|^quote date", t):
             break
-        m = re.match(r"^section\s*[–-]\s*(\d+)", t)
+        if ALL_BLOCK.match(text.strip()) and not re.match(r"^[Ø➢•]\s*(excess|deductible)", text.strip(), re.I):
+            allc.append(raw)
+            continue
+        m = H_SECTION.match(t)
         if m:
-            sec, state = int(m.group(1)), None
+            sec, state, tbl = int(m.group(1)), None, None
             continue
         if re.match(r"^conditions applicable to all", t):
             sec, state = "all", "cond"
             continue
-        if t.startswith("**") or t.startswith("table of") or re.match(r"^section\s+\d", t) or t == "section excess":
+        if t.startswith("table of"):
+            tbl = {"title": raw, "header": None, "rows": []}
+            tables[sec] = tbl
             continue
-        if re.match(r"^(excess/)?deductible:?$|^excess:?$", t):
+        if tbl is not None:
+            second = texts[1][1].strip() if len(texts) > 1 else ""
+            if tbl["header"] is None and second and norm(raw) == "section":
+                tbl["header"] = [raw, second]
+            elif second:
+                tbl["rows"].append({"name": raw, "text": [x.strip() for x in second.split("\n") if x.strip()]})
+            elif c0 > 1 and tbl["rows"]:
+                tbl["rows"][-1]["text"] += [x.strip() for x in text.split("\n") if x.strip()]
+            continue
+        if ASSET_REG.search(raw) and isinstance(sec, int):
+            asset.add(sec)
+            if t.startswith("**"):
+                continue
+        if t.startswith("**") or t == "section excess" or re.match(r"^section\s+\d", t):
+            continue
+        if H_DED.match(t):
             state = "ded"
             continue
-        if re.match(r"^(coverages\s*/\s*clauses|terms/conditions|terms and conditions/warranties|conditions\s*/\s*warranties|coverage:?$)", t):
+        if H_COND.match(t):
             state = "cond"
             continue
         if t.startswith("excess") and len(t) > 12 and not t.startswith("excess:"):
@@ -301,13 +336,15 @@ def terms_by_section(sh):
             continue
         if sec is None:
             continue
+        if len(texts) > 1 and state == "ded" and sec != "all":
+            raw = f"{raw} \u2013 {texts[1][1].strip()}"          # "Escalation | Policy Excess": the value belongs to the line
         if sec == "all":
             allc.append(raw)
         elif state == "ded":
             ded.setdefault(sec, []).append(raw)
         else:
             cond.setdefault(sec, []).append(raw)
-    return {"conditions": cond, "deductibles": ded, "all": allc}
+    return {"conditions": cond, "deductibles": ded, "all": allc, "tables": tables, "asset_register": sorted(asset)}
 
 
 def unify(q):

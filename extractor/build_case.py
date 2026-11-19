@@ -111,6 +111,12 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     terr = float(terr) if isinstance(terr, (int, float)) else 0
     case["premium"] = {"basic": (net - terr) if net is not None else 0, "terrorism": terr, "net": net if net is not None else 0,
                        "taxes": [{"type": "IGST", "rate": 0.18, "amount": gst}], "final": final if final is not None else 0}
+    if sec["layout"] == "matrix" and net is not None and final is not None:
+        # whole-rupee summary like the issued policies of this layout: net / basic / final cut to the rupee, terrorism = the difference, tax = the difference
+        import math
+        n0, b0, f0 = math.floor(net + 1e-9), math.floor(net - terr + 1e-9), math.floor(final + 1e-9)
+        case["premium"] = {"basic": b0, "terrorism": n0 - b0, "net": n0, "taxes": [{"type": "IGST", "rate": 0.18, "amount": f0 - n0}], "final": f0}
+        case["presentation"]["premium_summary_decimals"] = 0
     notes.append("tax split (IGST vs CGST+SGST) is not decided by the files; placeholder IGST 18%" + ("" if "premium.terrorism" in f else "; the terrorism part of the premium was not found (0)"))
     share = slip.get("our_share")
     case["coinsurance"] = ([{"insurer": c["name"], "share_pct": c["share"] * 100 if c["share"] <= 1 else c["share"]} for c in (slip.get("co_insurers") or [])]
@@ -121,6 +127,14 @@ def assemble(res: dict) -> tuple[dict, list[str]]:
     ba = (sec.get("scalars") or {}).get("business_activity", {}).get("value")
     if ba and not case["insured"]["business_activity"]:
         case["insured"]["business_activity"] = str(ba)
+    if not case["insured"]["business_activity"]:
+        # no business description anywhere: the quote's Occupancy column (first location) is the business activity
+        qocc = next((str(l.get("occupancy") or "").strip() for l in (sec.get("locations") or []) if str(l.get("occupancy") or "").strip()), "") \
+            or next((l["occupancy"] for l in (annex_mod._pick((sec.get("loc_matrix") or {}).get("locations") or [], float(sec["sections"][1]["sum_insured"] or 0))
+                                                or (sec.get("loc_matrix") or {}).get("locations") or []) if l.get("occupancy")), "") or str(hdr.get("occupancy") or "").strip()
+        if qocc:
+            case["insured"]["business_activity"] = re.sub(r"\s+", " ", qocc)
+            notes.append("business activity taken from the Occupancy column of the quote (no business description was found)")
 
     rows = []
     for n in range(1, 14):
