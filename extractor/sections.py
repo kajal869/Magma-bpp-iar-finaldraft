@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 
+from . import loc_columns
 from .legacy import quote2
 from .legacy.grid import is_num, load, norm
 
@@ -180,7 +181,7 @@ def laghu_terms(sh, default_sec: int | None = None) -> dict:
         if re.match(r"^conditions applicable to all", low):
             mode, sec, sub, explicit = "all", None, None, False
             continue
-        if re.match(r"^terms, conditions, and capacity|^quotation valid|^quote date|^our (terms|quote)", low):
+        if re.match(r"^terms, conditions, and capacity|^quotation valid|^quote valid|^quote date|^our (terms|quote)", low):
             if mode == "all":
                 mode = None
             continue
@@ -232,8 +233,10 @@ def _legacy(path, variant, out) -> bool:
     t = q.get("terms", {})
     out["terms"] = {"conditions": {int(k): v for k, v in (t.get("conditions") or {}).items()},
                     "deductibles": {int(k): v for k, v in (t.get("deductibles") or {}).items()},
-                    "all": t.get("all") or [], "sub_groups": {}}
+                    "all": t.get("all") or [], "sub_groups": {}, "tables": {int(k): v for k, v in (t.get("tables") or {}).items() if k},
+                    "asset_register": list(t.get("asset_register") or [])}
     out["locations"] = q.get("locations", [])
+    out["premium_parts"] = q.get("premium_parts") or {}
     out["header"] = {k: q.get(k) for k in ("insured_name", "address", "risk_location", "occupancy", "business_description", "policy_start", "policy_end")}
     out["layout_info"] = {"source": "builtin", "profile": None, "reader": q["layout"]}
     return True
@@ -304,9 +307,16 @@ def read(path: str, variant: str | None = None, net: float | None = None, slip: 
     if out["net"] is None:
         out["net"] = net
     out["scalars"] = engine.scalars(sheets)
+    if out["layout"] not in ("laghu", "blocks", "asset", "matrix"):
+        try:
+            out["loc_matrix"] = loc_columns.read(sheets)       # item-by-location table (locations as columns), for the annexures
+            out["section_blocks"] = loc_columns.read_section_blocks(sheets)   # "Fire Section - <location>" blocks stacked down a sheet
+        except Exception as e:
+            out["warnings"].append(f"location table could not be read: {type(e).__name__}: {e}")
     _apply_taught(out, engine.taught_overrides(sheets))
     _from_slip(out, slip or {})
     _drop_unopted_terms(out)
+    _finish_terms(out)
     out["warnings"] += _status(out)
     out["warnings"] += _missed_sections(out, sheets)
     return out
@@ -384,6 +394,55 @@ def _from_slip(out: dict, slip: dict) -> None:
             row["note"] = (row["note"] + "; " if row["note"] else "") + f"closing slip says {v:,.0f} for this section"
 
 
+ASSET_REGISTER_WARRANTY = ("Asset Register Warranty - It is hereby agreed that all equipment\u2019s with same description mentioned in the quote/policy and included in the "
+                           "asset register maintained by the insured as on the date of inception of the policy are covered under the sum insured declared by The Insured. "
+                           "In the event of any loss and/or damage admissible as per the terms of the policy, if it is found that the sum insured declared is less than the "
+                           "amount required to be insured as determined from the insured's asset register, the claim amount will be reduced proportionately. Deductions "
+                           "towards depreciation salvage and excess shall be as per the terms and conditions of the policy.")
+OTHER_TERMS_ALL = "All other terms and conditions as per Magma Business Protect Policy Wordings"
+GENERAL_CLAUSE = re.compile(r"sanction|cyber (loss|risk)|communicable disease|all other terms|transmission and distribution", re.I)
+_ALL_ORDER = (r"sanction", r"cyber", r"communicable", r"transmission and distribution")
+
+
+def _finish_terms(out: dict) -> None:
+    """Terms that depend on more than one block of the quote (the readers return what each block says; this joins them).
+    * Asset Register Warranty: printed under a section whose equipment list is only promised "as annexure" (or that mentions an asset register).
+    * Conditions applicable to all sections: the quote's closing clause block, the Transmission & Distribution line (a general condition wherever the
+      quote states it with "outside the insured premises") and the standard closing line, in the order the issued policies use. Laghu quotes state
+      their own list and keep it."""
+    t = out["terms"]
+    opted = {n for n, s in out["sections"].items() if s["sum_insured"] or s["premium"]}
+    for n in t.get("asset_register") or []:
+        if n in opted and n in (4, 5, 9) and not any(l.startswith("Asset Register Warranty") for l in t["conditions"].get(n, [])):
+            t["conditions"].setdefault(n, []).append(ASSET_REGISTER_WARRANTY)
+    t["tables"] = {n: v for n, v in (t.get("tables") or {}).items() if n in opted and v.get("rows")}
+    if out["layout"] == "laghu":
+        return
+    if not t["all"]:
+        # the quote printed its general clauses inside the Section 1 list: they belong to "Conditions and warranties applicable to all sections"
+        moved = [l for l in t["conditions"].get(1, []) if GENERAL_CLAUSE.search(l)]
+        if moved:
+            t["conditions"][1] = [l for l in t["conditions"][1] if l not in moved]
+            t["all"] = moved
+    if not t["all"]:
+        return
+    t["all"] = [OTHER_TERMS_ALL if re.match(r"\s*all other terms", l, re.I) else l for l in t["all"]]
+    seen, lines = set(), []
+    for l in t["all"]:                                    # the same clause printed twice ("...Clause" / "...Clause.") prints once
+        k = re.sub(r"[^a-z0-9]+", " ", l.lower()).strip()
+        if k not in seen:
+            seen.add(k)
+            lines.append(l)
+    extra = [l for sec_lines in t["conditions"].values() for l in sec_lines if re.search(r"transmission and distribution.*outside the insured premises", l, re.I)]
+    for l in extra[:1]:
+        if not any(re.search(r"transmission and distribution", x, re.I) for x in lines):
+            lines.append(l)
+    if not any(re.search(r"all other terms", x, re.I) for x in lines):
+        lines.append(OTHER_TERMS_ALL)
+    rank = lambda l: next((i for i, rx in enumerate(_ALL_ORDER) if re.search(rx, l, re.I)), len(_ALL_ORDER) if not re.search(r"all other terms", l, re.I) else 99)  # noqa: E731
+    t["all"] = sorted(lines, key=rank)
+
+
 def _drop_unopted_terms(out: dict) -> None:
     """Terms are printed only for sections that carry a sum insured or premium on the quote."""
     opted = {n for n, s in out["sections"].items() if s["sum_insured"] or s["premium"]}
@@ -436,9 +495,12 @@ def term_groups(terms: dict) -> dict:
     """-> {'section_conditions': [...], 'deductibles': [...], 'all_sections_conditions': {...}} in the schema's text-group shape."""
     def groups(by_sec, with_sub=False):
         out = []
-        for n in sorted(by_sec):
-            lines = [x for x in by_sec[n] if x]
+        for n in sorted(set(by_sec) | (set() if with_sub else set(terms.get("tables") or {}))):
+            lines = [x for x in by_sec.get(n, []) if x]
             g = {"key": f"S{n}", "title": TERM_TITLES.get(n, f"SECTION {n}"), "lines": lines}
+            tb = None if with_sub else (terms.get("tables") or {}).get(n)
+            if tb:
+                g["table_header"], g["table"] = tb["header"] or ["Section", "Excess"], [{"name": r["name"], "text": r["text"]} for r in tb["rows"]]
             sg = terms.get("sub_groups", {}).get(n) if with_sub else None
             if sg:
                 g["sub_groups"] = [{"title": k, "lines": v} for k, v in sg.items()]

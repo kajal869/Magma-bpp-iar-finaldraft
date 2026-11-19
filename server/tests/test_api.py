@@ -275,3 +275,34 @@ def test_policy_number_is_never_filled_from_the_expiring_number(files, tmp_path)
     d = analyze(p, files["quote"]).json()
     f = {x["key"]: x for x in d["fields"]}["system.policy_no"]
     assert f["value"] == "" and f["status"] == "missing" and "P0000000000/9999/100001" in (f["note"] or "")
+
+
+def test_basic_premium_is_flagged_only_when_terrorism_is_really_unknown():
+    from extractor.envelope import Field
+    from server import fields as fm
+    case = {"premium": {"basic": 90.0, "terrorism": 0, "net": 90.0, "taxes": [], "final": 106.2}}
+
+    def basic(**env):
+        return next(f for f in fm.build_fields(case, env) if f["key"] == "premium.basic")
+    ok = lambda name, v: Field(name, v, "ok", {"tool": "slip"})  # noqa: E731
+    assert basic(**{"terrorism.opted": ok("terrorism.opted", "No")})["status"] == "ok"
+    assert basic(**{"premium.terrorism": ok("premium.terrorism", 10.0)})["status"] == "ok"
+    assert basic(**{"terrorism.opted": ok("terrorism.opted", "Yes")})["status"] == "check"       # opted, amount not found
+    assert basic()["status"] == "check"                                                          # the slip says nothing
+
+
+def test_hypothecation_is_optional_and_its_block_is_dropped_when_empty(tmp_path):
+    import copy
+    import json
+    from app import render
+    from server import fields as fm
+    base = json.loads((render.APP / "cases" / "demo_laghu.json").read_text(encoding="utf-8"))
+    h = next(f for f in fm.F if f[0] == "hypothecation")
+    assert h[6] is False                                            # not a required field: no blank-acknowledgement prompt for it
+    assert fm.blanks(fm.build_fields(base | {"hypothecation": []}, {})) == [b for b in fm.blanks(fm.build_fields(base | {"hypothecation": []}, {})) if b["key"] != "hypothecation"]
+    for banks, shown in (([], False), (["AU Small Finance Bank"], True)):
+        d = copy.deepcopy(base)
+        d["hypothecation"] = banks
+        render.build_dict("t", d, tmp_path, False, validate=False)
+        html = (tmp_path / "t_front.html").read_text(encoding="utf-8")
+        assert ("HYPOTHECATION DETAILS" in html) is shown and (("AU Small Finance Bank" in html) is shown)

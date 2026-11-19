@@ -294,8 +294,17 @@ def _apply_edits(sess: dict, req: RenderRequest):
         case["schedule"]["sections"] = [{**r, "sum_insured": sec["sections"][r["no"]]["sum_insured"], "premium": sec["sections"][r["no"]]["premium"]} for r in case["schedule"]["sections"]]
         case["options"]["wording_sections"] = [n for n, s in sec["sections"].items() if s["sum_insured"] or s["premium"]]
     if req.terms is not None:
-        case["terms"] = {"section_conditions": [g.model_dump() for g in req.terms.sectionConditions if g.lines or g.title],
-                         "deductibles": [g.model_dump() for g in req.terms.deductibles if g.lines or g.title],
+        def keep(new_groups, old_groups):   # tables / sub-groups are not editable in the review screen: carry them over from the extracted group of the same key
+            old_by = {g.get("key"): g for g in old_groups}
+            out = []
+            for g in new_groups:
+                if g.lines or g.title:
+                    d = g.model_dump()
+                    d.update({k: v for k, v in (old_by.get(g.key) or {}).items() if k in ("table", "table_header", "sub_groups")})
+                    out.append(d)
+            return out
+        case["terms"] = {"section_conditions": keep(req.terms.sectionConditions, case["terms"]["section_conditions"]),
+                         "deductibles": keep(req.terms.deductibles, case["terms"]["deductibles"]),
                          "all_sections_conditions": {**case["terms"]["all_sections_conditions"], "lines": [x for x in req.terms.allLines if x.strip()]}}
     rows = res["addons"]
     if req.addons is not None:
@@ -311,6 +320,7 @@ def _apply_edits(sess: dict, req: RenderRequest):
                 extra_blank.append({"key": f"addon:{e.id if e.id is not None else 'new'}", "label": f"Add-on cover: {e.name or src.get('name', '')}".strip(), "group": "Add-on covers"})
     if sec:
         case["annexures"], _ = build_case.annexures_for({"addons": rows, "slip": res.get("slip")}, sec, case)
+        case["options"]["clause_wording_ids"] = build_case.clause_ids(rows)
     return case, extra_blank
 
 

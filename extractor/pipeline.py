@@ -44,6 +44,10 @@ def run(slip_path: str, quote_path: str, imd_path: str | None = None) -> dict:
         sec = None
         warnings.append(f"sections could not be read: {type(e).__name__}: {e}")
     resolved = _extras(_from_sections(resolved, sec, slip_total), sec)
+    opted = str(raw.get("terrorism_opted") or "").strip().lower()
+    if opted in ("yes", "no"):            # the slip's own statement; it decides whether "no terrorism premium found" is expected
+        from .envelope import Field
+        resolved.append(Field("terrorism.opted", opted.capitalize(), "ok", {"tool": "slip", "sheet": "Closing Slip", "cell": None, "method": "label"}))
     return {"fields": resolved, "addons": rows, "sections": sec, "slip": raw, "warnings": warnings, "variant": info.get("variant"), "cross_checks": cross}
 
 
@@ -56,6 +60,10 @@ def _extras(fields: list, sec: dict | None) -> list:
     for name, sc in (sec.get("scalars") or {}).items():
         if name in ("premium.terrorism", "hypothecation") and not any(f.field == name for f in out):
             out.append(Field(name, sc["value"], "ok", {"tool": "quote", "sheet": sc["sheet"], "cell": sc["ref"], "method": "label"}))
+    terr = ((sec.get("premium_parts") or {}).get("terrorism") or 0)
+    if terr > 0 and not any(f.field == "premium.terrorism" for f in out):   # matrix quotes: terrorism + FLOP terrorism + add-on premium columns
+        out.append(Field("premium.terrorism", round(float(terr), 2), "derived", {"tool": "quote", "sheet": (sec.get("layout_info") or {}).get("reader") or "", "cell": "", "method": "sum of the terrorism premium columns"},
+                         note="terrorism premium + FLOP terrorism + add-on premium, as the quote's summary sheet states them"))
     for target, t in (sec.get("taught") or {}).items():
         if target in ("premium.net", "premium.final", "premium.terrorism", "hypothecation", "business_activity"):
             out = [f for f in out if f.field != target]

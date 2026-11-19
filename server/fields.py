@@ -38,7 +38,7 @@ F = [
     ("premium.basic", "Basic premium (INR)", "Premium", "premium.basic", "money", False, True, None),
     ("premium.net", "Net premium (INR)", "Premium", "premium.net", "money", False, True, None),
     ("premium.final", "Final premium incl. tax (INR)", "Premium", "premium.final", "money", False, True, "premium"),
-    ("hypothecation", "Hypothecation (financier)", "Other", "hypothecation", "lines", False, True, None),
+    ("hypothecation", "Hypothecation (financier)", "Other", "hypothecation", "lines", False, False, None),
 ]
 BY_KEY = {f[0]: f for f in F}
 # UI key -> extractor envelope field
@@ -145,10 +145,18 @@ def build_fields(case: dict, env: dict, suggest: dict | None = None, values: dic
             else:
                 status, source, note = "missing", "Not in the IMD master", "The broker's contact is taken from the IMD master; no record or no value for this broker."
         elif key == "premium.basic":
-            status, source, note = "check", "Net premium (derived)", "Terrorism part of the premium is not in the files; basic = net, terrorism = 0"
+            terr, opted = env.get("premium.terrorism"), env.get("terrorism.opted")
+            if terr is not None and terr.value not in (None, "") and terr.status in ("ok", "derived"):
+                source = "Net premium less the terrorism premium"
+            elif opted is not None and opted.value == "No":
+                source = "Net premium (terrorism not opted on the slip)"
+            elif opted is not None and opted.value == "Yes":
+                status, source, note = "check", "Net premium (derived)", "Terrorism is opted on the slip but its premium was not found on the quote; basic = net, terrorism = 0"
+            else:
+                status, source, note = "check", "Net premium (derived)", "The slip does not say whether terrorism is opted; basic = net, terrorism = 0"
         elif key == "hypothecation":
             if not value.strip():
-                status, source = "missing", "No financial interest on the quote"
+                status, source = "missing", "No financial interest in the files; the Hypothecation Details block is left out of the draft"
             else:
                 source = "Quote (financial interest)"
         elif key == "system.sac_code":
