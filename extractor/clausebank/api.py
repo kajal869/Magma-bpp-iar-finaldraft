@@ -84,7 +84,7 @@ def variant_token(sheet: str):
 def extract_rows(path: str, variant: str | None = None) -> tuple[list[dict], list[str]]:
     """Quote rows (all sheets). With a chosen variant, sheets of the other variants are dropped; with variants present but none
     chosen, every row is kept and tagged so it goes to review."""
-    rows = quote_rows.extract("run", path)
+    rows = [r for r in quote_rows.extract("run", path) if not r.get("hidden")]      # hidden sheets are never read
     warnings = []
     tokens = {variant_token(r["sheet"]) for r in rows} - {None}
     for r in rows:
